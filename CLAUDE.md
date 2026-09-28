@@ -48,6 +48,8 @@ Hostlist (ЧТО десинкать) — от сервиса, общий. Стр
 - Менять IP при DPI по SNI бесполезно (у youtubei всего 4 IP, одинаковые у всех резолверов).
 - TLS 1.2-клиенты (напр. телевизоры) zapret'ом не спасаются — не наш кейс, но учитывать в FAQ.
 - Мобильные операторы часто требуют отличных от проводных стратегий.
+- Боевой тест 28.09.2026 (Manjaro, городской провайдер): `wssize` не нужен — работает чистый
+  `multidisorder:pos=host+1,midsld` (`own-multidisorder-hostmid`, первый в очереди).
 - blockcheck2 в рантайме требует `hexdump` и `nslookup`/`host` (без hexdump все тесты падают,
   без резолвера не стартует) — проверять при установке. Стратегии в списках помечены
   `--comment=<id>` (nfqws2 игнорирует) — так id виден в SUMMARY.
@@ -78,6 +80,7 @@ Hostlist (ЧТО десинкать) — от сервиса, общий. Стр
 - `docs/` — исследования и решения; `docs/ipc-api.md` — контракт renderer↔main↔helper;
   `docs/testing.md` — уровни тестов и где они живут.
   `docs/roadmap.md` — что делаем после первой версии.
+  `docs/bugs.md` — найденные баги (B<n>), в т.ч. с боевых тестов; `docs/manual-testing.md` — чек-лист и журнал прогонов.
 - `tests/` — `unit/`, `contract/`, `strategies/`, `system/`, `dpi-stand/` (docker compose с фейковым DPI), `e2e/`.
 - `app/` — Electron: `main/` (main, preload, ipc, `services/mock.js` | `services/real.js`), `renderer/`.
 - `system/` — то, что ставится от root: install/uninstall, `ytu-helper`, systemd, nft, polkit, AppArmor.
