@@ -48,7 +48,7 @@ jobs:
       - name: sha256
         working-directory: out
         run: sha256sum -- *.AppImage | tee SHA256SUMS
-      - name: draft release
+      - name: publish release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
@@ -56,5 +56,5 @@ jobs:
           pre=
           case $VERSION in *-*) pre=--prerelease ;; esac
           # shellcheck disable=SC2086
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag $pre \
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $pre \
             --title "$GITHUB_REF_NAME" --generate-notes out/*.AppImage out/SHA256SUMS
