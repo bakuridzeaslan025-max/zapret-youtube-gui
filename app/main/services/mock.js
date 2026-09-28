@@ -61,6 +61,7 @@ const SCENARIOS = {
   deep: { installed: true, service: 'broken', quickFound: false, deepFound: true },
   'deep-fail': { installed: true, service: 'broken', quickFound: false, deepFound: false },
   'new-network': { installed: true, service: 'on', networkChangeAfter: 4000 },
+  offline: { installed: true, service: 'on', offlineAfter: 1500, offlineFor: 8000 },
   'helper-fail': { installed: true, service: 'broken', selectError: 'HELPER_FAILED' },
   // first getState calls fail (main + renderer init) → renderer error screen with retry
   'state-fail': { installed: true, service: 'on', getStateFailures: 2 },
@@ -111,6 +112,7 @@ class MockService extends EventEmitter {
       installed,
       service: installed ? this.sc.service : 'off',
       network: this.network,
+      online: true,
       strategy: null,
       lastCheck: null,
       requirements: { ok: true, missing: [] },
@@ -124,6 +126,17 @@ class MockService extends EventEmitter {
 
     if (this.sc.running) {
       setTimeout(() => this.startSelect(this.sc.running, true).catch(() => {}), 0);
+    }
+    if (this.sc.offlineAfter) {
+      setTimeout(() => {
+        this.log('сеть пропала');
+        this.update({ network: null, online: false, lastCheck: null });
+        setTimeout(() => {
+          this.log('сеть появилась, перепроверяем');
+          this.update({ network: this.network, online: true });
+          this.checkNow().catch(() => {});
+        }, this.sc.offlineFor / this.speed);
+      }, this.sc.offlineAfter / this.speed);
     }
     if (this.sc.networkChangeAfter) {
       setTimeout(() => this.changeNetwork(NET_MOBILE), this.sc.networkChangeAfter);

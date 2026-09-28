@@ -145,7 +145,8 @@ if (!app.requestSingleInstanceLock()) {
 
   function trayImage() {
     let name = 'off';
-    if (state && state.service === 'on') name = 'on';
+    if (state && state.online === false && state.service !== 'selecting') name = 'off';
+    else if (state && state.service === 'on') name = 'on';
     else if (state && state.service === 'broken') name = 'error';
     else if (state && state.service === 'selecting') {
       const pct = progress && progress.total ? progress.done / progress.total : 0;
@@ -156,6 +157,7 @@ if (!app.requestSingleInstanceLock()) {
 
   function statusLine() {
     if (!state || !state.installed) return 'Не установлено';
+    if (state.online === false && state.service !== 'selecting') return 'Нет сети';
     const net = state.network ? ` · ${state.network.label}` : '';
     const label = { on: 'Работает', off: 'Выключено', broken: 'Не работает', selecting: 'Идёт подбор' }[state.service];
     return label + net;

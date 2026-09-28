@@ -44,6 +44,8 @@ type State = {
   installed: boolean
   service: 'on' | 'off' | 'broken' | 'selecting'   // broken = включено, но проверка не проходит
   network: Network | null
+  online: boolean   // false = нет default route / активного соединения: статус «Нет сети», подбор не предлагаем;
+                    // при возврате сети main сам делает checkNow (без подбора). service при этом не меняется
   strategy: { id: string, name: string, selectedAt: string } | null  // для текущей сети
   lastCheck: CheckResult | null
   requirements: { ok: boolean, missing: string[] }  // nfnetlink_queue, nft, hexdump, nslookup, tcp_timestamps, apparmor...

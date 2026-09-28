@@ -295,9 +295,12 @@ const screens = {
     const noStrategy = !st.strategy;
     const selecting = svc === 'selecting';
     const on = svc === 'on' || svc === 'broken';
+    const offline = st.online === false && !selecting;
     let center;
     if (S.busy === 'enable' || S.busy === 'disable') {
       center = `<div class="center main">${ringBadge('ph-power', 30, 'lg', 'spin')}<h1>${esc(S.busy === 'enable' ? T.enabling : T.disabling)}</h1><p class="lead">${esc(T.opWait)}</p></div>`;
+    } else if (offline) {
+      center = `<div class="center main">${badge('ph-wifi-slash', 'lg')}<h1>${esc(T.statusOffline)}</h1><p class="lead">${esc(T.statusOfflineLead)}</p></div>`;
     } else if (svc === 'on') {
       center = `<div class="center main glow">${badge('ph-check', 'lg accent glow')}<h1>${esc(T.statusOn)}</h1><p class="lead">${esc(T.statusOnLead)}</p></div>`;
     } else if (svc === 'broken') {
@@ -321,6 +324,7 @@ const screens = {
 
     let netSub;
     if (selecting) netSub = T.selectingNet;
+    else if (offline) netSub = noStrategy ? T.noStrategy : T.strategyPicked(fmtDate(st.strategy.selectedAt));
     else if (noStrategy) netSub = T.noStrategy;
     else {
       netSub = T.strategyPicked(fmtDate(st.strategy.selectedAt));
@@ -330,10 +334,10 @@ const screens = {
     const protection = selecting
       ? `<div class="card-row dim"><span class="stack tight"><span class="t strong">${esc(T.protection)}</span><span class="s">${esc(T.protectionPaused)}</span></span>${toggle('toggle', false, { disabled: true })}</div>`
       : `<div class="card-row"><span class="label strong">${esc(T.protection)}</span>${toggle('toggle', S.busy === 'enable' || (on && S.busy !== 'disable'), { shine: true, disabled: !!S.busy })}</div>`;
-    const banner = noStrategy && net && !selecting
+    const banner = noStrategy && net && !selecting && !offline
       ? `<div class="banner">${icon(netIcon)}<span class="stack"><span class="t">${esc(T.newNetTitle)}</span><span class="s">${esc(T.newNetSub(net.label))}</span></span>${btn('select-quick', T.selectShort, 'btn-primary')}</div>`
       : '';
-    const actions = svc === 'broken' || selecting ? '' : `<div class="row-btns">
+    const actions = svc === 'broken' || selecting || offline ? '' : `<div class="row-btns">
         ${btn('check', T.checkNow, 'btn-secondary btn-md', 'ph-arrows-clockwise', !!S.busy)}
         ${btn('select-quick', noStrategy ? T.selectShort : T.reselect, 'btn-secondary btn-md', 'ph-magic-wand', !!S.busy)}
       </div>`;
@@ -342,7 +346,7 @@ const screens = {
         <div class="card">
           ${protection}
           <div class="sep"></div>
-          <div class="card-row net">${icon(netIcon)}<span class="stack tight"><span class="t">${esc(net ? net.label : T.unknownNetwork)}</span><span class="s">${esc(netSub)}</span></span></div>
+          <div class="card-row net">${icon(netIcon)}<span class="stack tight"><span class="t">${esc(net ? net.label : offline ? T.noConnection : T.unknownNetwork)}</span><span class="s">${esc(netSub)}</span></span></div>
         </div>
         ${actions}
       </div>`;

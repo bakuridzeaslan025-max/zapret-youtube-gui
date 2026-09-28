@@ -33,6 +33,7 @@ const SHOTS = [
   { id: '5a-on', scenario: 'on', steps: [] },
   { id: '5b-off', scenario: 'off', steps: [] },
   { id: '5c-broken', scenario: 'broken', steps: [] },
+  { id: '5g-offline', scenario: 'offline', steps: [waitText('Нет сети')] },
   { id: '5e-new-network', scenario: 'new-network', steps: [waitText('Новая сеть')] },
   { id: '6a-settings', scenario: 'on', steps: [click('settings'), waitText('Запускать при старте')] },
   {

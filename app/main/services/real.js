@@ -230,6 +230,7 @@ class RealService extends EventEmitter {
     this.pollTimer = setInterval(() => this.refresh().catch(() => {}), POLL_MS);
     if (this.pollTimer.unref) this.pollTimer.unref();
     this.refresh().catch(() => {});
+    this.watchRoutes();
   }
 
   // ---- infrastructure ----
@@ -401,6 +402,13 @@ class RealService extends EventEmitter {
       && Date.now() - (this.selectEndedAt || 0) > REATTACH_GRACE_MS) this.attachSelect();
     const prev = this.network;
     this.network = network;
+    const wasOnline = this.online;
+    this.online = !!network;
+    if (wasOnline === true && !this.online) {
+      this.log('сеть пропала');
+      this.lastCheck = null;
+      this.checkWhileOn = false;
+    }
     if (network && prev && prev.id !== network.id) {
       this.log(`сеть сменилась: ${network.label}`);
       this.lastCheck = null;
@@ -421,6 +429,24 @@ class RealService extends EventEmitter {
     }
     await this.syncQuic();
     this.emitState();
+    if (wasOnline === false && this.online) {
+      this.log('сеть появилась, перепроверяем');
+      if (this.status && this.status.installed && !this.select) this.checkNow().catch(() => {});
+    }
+  }
+
+  // react to route changes right away instead of waiting for the 10 s poll (no root needed)
+  watchRoutes() {
+    let timer = null;
+    try {
+      const mon = spawn('ip', ['monitor', 'route'], { stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, PATH: SYS_PATH } });
+      mon.on('error', () => {});
+      mon.stdout.on('data', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => this.refresh().catch(() => {}), 1500);
+      });
+      if (mon.unref) mon.unref();
+    } catch { /* polling still works */ }
   }
 
   buildState() {
@@ -433,6 +459,7 @@ class RealService extends EventEmitter {
       installed: !!s.installed,
       service,
       network: this.network,
+      online: !!this.network,
       strategy: this.networkStrategy(),
       lastCheck: this.lastCheck,
       requirements: s.requirements || { ok: false, missing: [] },
