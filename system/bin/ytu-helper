@@ -513,7 +513,8 @@ verify_candidates()
 first_blocked_host()
 {
 	local d v
-	if [ "$YTU_SIMULATE" = 1 ]; then
+	# YTU_NO_PREFLIGHT: test hook for a long real run on an unblocked network (see cmd_select)
+	if [ "$YTU_SIMULATE" = 1 ] || [ "$YTU_NO_PREFLIGHT" = 1 ]; then
 		echo "${YTU_CHECK_HOSTS%% *}"
 		return
 	fi
@@ -665,6 +666,7 @@ cmd_select()
 	rm -f "$SEL_LAST"
 	# test hooks; pkexec clears the environment, so an unprivileged caller cannot set them
 	[ "$YTU_SIMULATE" = 1 ] && env="--setenv=YTU_SIMULATE=1 --setenv=YTU_SIM_RATE=${YTU_SIM_RATE:-50} --setenv=YTU_IPVS=${YTU_IPVS:-}"
+	[ -z "$PKEXEC_UID" ] && [ "$YTU_NO_PREFLIGHT" = 1 ] && env="$env --setenv=YTU_NO_PREFLIGHT=1"
 	systemctl reset-failed "$YTU_SELECT_UNIT" 2>/dev/null
 	# shellcheck disable=SC2086
 	systemd-run --unit="$YTU_SELECT_UNIT" --collect --quiet -p PrivateTmp=yes $env \

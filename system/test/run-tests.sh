@@ -70,13 +70,13 @@ if [ "$MODE" = full ]; then
 	expect "select deep (SIMULATE)" "YTU_SIMULATE=1 YTU_SIM_RATE=90 $H select deep --network n-lte | tail -n 1" '"found":true,"strategyId":"bc2-'
 	expect "custom strategy stored" "$H status" '"custom":\[\{"id":"bc2-'
 	expect "service restored after select" "sleep 2; systemctl is-active ytunblock" '^active'
-	expect "select survives caller kill" "$H select quick >/dev/null 2>&1 & p=\$!; sleep 6; kill \$p; sleep 2; $H status" '"service":"selecting"'
+	expect "select survives caller kill" "YTU_NO_PREFLIGHT=1 $H select quick >/dev/null 2>&1 & p=\$!; sleep 6; kill \$p; sleep 2; $H status" '"service":"selecting"'
 	expect "follow reattaches (unprivileged)" "su nobody -s /bin/sh -c 'timeout 5 $H select-follow' | head -n 1" '"event":"progress"'
 	expect "busy while selecting" "$H apply flowseal-general-alt; $H set-quic off; $H start" 'BUSY.*BUSY.*BUSY'
 	expect "cancel" "$H cancel; tail -n 1 /run/ytunblock/select.jsonl" '"running":true\} .*"cancelled":true'
 	expect "no leftovers after cancel" "nft list tables | grep -c blockcheck; pgrep -fc '[b]lockcheck2.sh'" '^0 0 $'
 	expect "service restored after cancel" "sleep 2; systemctl is-active ytunblock" '^active'
-	expect "crash recovery" "($H select quick >/dev/null 2>&1 &); sleep 8; nft list tables | grep -c blockcheck; systemctl kill -s KILL ytunblock-select; sleep 1; $H status >/dev/null; nft list tables | grep -c blockcheck; sleep 2; systemctl is-active ytunblock; cat /var/lib/ytunblock/last-select.json" '^1 0 active .*"found":false'
+	expect "crash recovery" "(YTU_NO_PREFLIGHT=1 $H select quick >/dev/null 2>&1 &); sleep 8; nft list tables | grep -c blockcheck; systemctl kill -s KILL ytunblock-select; sleep 1; $H status >/dev/null; nft list tables | grep -c blockcheck; sleep 2; systemctl is-active ytunblock; cat /var/lib/ytunblock/last-select.json" '^1 0 active .*"found":false'
 else
 	expect "pre-start hook" "INVOCATION_ID=test $H _pre-start && nft list table inet ytunblock" 'queue flags bypass to 7713'
 	expect "run hook (nfqws2 with strategy)" "INVOCATION_ID=test timeout 4 $H _run 2>&1; true" 'binding this socket to queue'
@@ -85,7 +85,7 @@ else
 	expect "select-run quick (SIMULATE)" "mkdir -p /run/ytunblock; : >/run/ytunblock/select.jsonl; YTU_SIMULATE=1 YTU_SIM_RATE=80 INVOCATION_ID=test $H _select-run quick --network n-work; tail -n 1 /run/ytunblock/select.jsonl" '"event":"done","mode":"quick","found":true'
 	expect "select-run deep (SIMULATE)" ": >/run/ytunblock/select.jsonl; YTU_SIMULATE=1 YTU_SIM_RATE=90 INVOCATION_ID=test $H _select-run deep; tail -n 1 /run/ytunblock/select.jsonl" '"found":true,"strategyId":"bc2-'
 	expect "no nslookup/host in image (shim path)" "command -v nslookup || command -v host || echo none" '^none $'
-	expect "real select-run starts nfqws2 (x86_64) via blockcheck2" ": >/run/ytunblock/select.jsonl; (INVOCATION_ID=test timeout -s TERM 25 $H _select-run quick; true); grep -c '^- curl_test' /var/log/ytunblock/select-quick.log; grep -c 'nfqws2 redirection' /var/log/ytunblock/select-quick.log; tail -n 1 /run/ytunblock/select.jsonl" '"cancelled":true|"reason":"not blocked"'
+	expect "real select-run starts nfqws2 (x86_64) via blockcheck2" ": >/run/ytunblock/select.jsonl; (YTU_NO_PREFLIGHT=1 INVOCATION_ID=test timeout -s TERM 25 $H _select-run quick; true); grep -c '^- curl_test' /var/log/ytunblock/select-quick.log; grep -c 'nfqws2 redirection' /var/log/ytunblock/select-quick.log; tail -n 1 /run/ytunblock/select.jsonl" ' [1-9][0-9]* [1-9] .*"cancelled":true'
 	expect "no leftovers after TERM" "nft list tables | grep -c blockcheck; pgrep -fc '[b]lockcheck2.sh'" '^0 0 $'
 fi
 
