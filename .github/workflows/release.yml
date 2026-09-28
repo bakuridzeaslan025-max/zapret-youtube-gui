@@ -45,6 +45,12 @@ jobs:
           pattern: appimage-*
           path: out
           merge-multiple: true
+      - name: add unversioned copies
+        working-directory: out
+        run: |
+          for f in *.AppImage; do
+            cp -- "$f" "$(echo "$f" | sed -E 's/-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?-/-/')"
+          done
       - name: sha256
         working-directory: out
         run: sha256sum -- *.AppImage | tee SHA256SUMS
