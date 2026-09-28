@@ -483,7 +483,8 @@ async function doInstall() {
     return showError(e, doInstall);
   }
   S.state = await window.api.getState();
-  runCheck('onboarding');
+  // strategies restored from the settings copy (reinstall): straight to the main screen, no reselection
+  runCheck(S.state.strategy ? 'main' : 'onboarding');
 }
 
 async function runCheck(origin) {

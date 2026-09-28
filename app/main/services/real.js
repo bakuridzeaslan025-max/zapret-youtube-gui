@@ -410,6 +410,13 @@ class RealService extends EventEmitter {
       if (!hasStrategy) this.log('способ для сети не подобран');
       this.emit('networkChanged', { network, hasStrategy });
     } else if (network && !prev) {
+      if (!this.restoreTried) {
+        this.restoreTried = true;
+        await this.restoreStrategies().catch((e) => this.log(`восстановление способов: ${e.message}`));
+        // installs made before the copy existed get one now
+        const st = (this.status && this.status.strategies) || {};
+        if (st.default || Object.keys(st.networks || {}).length) await this.backupStrategies();
+      }
       await this.syncNetwork().catch(() => {});
     }
     await this.syncQuic();
@@ -488,6 +495,7 @@ class RealService extends EventEmitter {
       this.syncedNetwork = undefined;
       await this.refreshNow();
       await this.syncNetwork().catch(() => {});
+      await this.restoreStrategies().catch((e) => this.log(`восстановление способов: ${e.message}`));
       await this.syncQuic();
       await this.applyAutostart().catch((e) => this.log(`автозапуск: ${e.message}`));
     } finally {
@@ -617,6 +625,7 @@ class RealService extends EventEmitter {
       this.checkWhileOn = false;
       this.log(`способ найден: ${this.strategyName(r.strategyId)}`);
       await this.refreshNow().catch(() => {});
+      await this.backupStrategies();
       for (let i = 0; i < 30 && this.status && this.status.service === 'selecting'; i++) {
         await new Promise((r2) => setTimeout(r2, 500));
         await this.refreshNow().catch(() => {});
@@ -663,11 +672,70 @@ class RealService extends EventEmitter {
     this.lastCheck = null;
     this.checkWhileOn = false;
     this.log(`способ выбран вручную: ${this.strategyName(id)}`);
+    await this.backupStrategies();
     await this.refreshNow();
   }
 
+  publicSettings() {
+    return Object.fromEntries(Object.keys(DEFAULT_SETTINGS).map((k) => [k, this.settings[k]]));
+  }
+
   async getSettings() {
-    return { ...this.settings };
+    return this.publicSettings();
+  }
+
+  async saveSettings() {
+    await fsp.mkdir(this.configDir, { recursive: true });
+    await fsp.writeFile(this.settingsFile, JSON.stringify(this.settings, null, 2));
+  }
+
+  // uninstall wipes /var/lib/ytunblock: keep a copy of the selected strategies in the user's settings
+  async backupStrategies() {
+    const st = this.status && this.status.strategies;
+    if (!st) return;
+    const pick = (r) => (r && r.id ? { id: r.id, selectedAt: r.selectedAt } : null);
+    const networks = {};
+    for (const [n, r] of Object.entries(st.networks || {})) if (pick(r)) networks[n] = pick(r);
+    this.settings.strategyBackup = { default: pick(st.default), networks };
+    await this.saveSettings().catch((e) => this.log(`не удалось сохранить копию стратегий: ${e.message}`));
+  }
+
+  // after (re)install, or on start when the helper has none: re-apply catalog strategies from the copy.
+  // bc2-* (deep) ones lived in /var/lib/ytunblock/custom and the helper takes no raw args: skipped.
+  async restoreStrategies() {
+    const b = this.settings.strategyBackup;
+    const st = (this.status && this.status.strategies) || {};
+    if (!b || !this.installed() || this.select) return false;
+    if (st.default || Object.keys(st.networks || {}).length) return false;
+    const known = new Set(this.loadCatalog().map((x) => x.id));
+    const items = [];
+    if (b.default) items.push([null, b.default.id]);
+    for (const [n, r] of Object.entries(b.networks || {})) items.push([n, r.id]);
+    let restored = 0;
+    for (const [net, id] of items) {
+      if (!known.has(id)) {
+        this.log(`способ ${id} не восстановлен: его нет в каталоге (найден глубоким подбором)`);
+        continue;
+      }
+      try {
+        await this.exclusive(() => this.helper(net ? ['apply', id, '--network', net] : ['apply', id]));
+        restored++;
+      } catch (e) {
+        this.log(`способ ${id} не восстановлен: ${e.message}`);
+      }
+    }
+    if (!restored) return false;
+    this.log(`восстановлено способов из копии: ${restored}`);
+    this.syncedNetwork = undefined;
+    this.status = await this.readStatus();
+    await this.syncNetwork().catch(() => {});
+    if (this.networkStrategy() && this.status.service !== 'on') {
+      await this.exclusive(() => this.helper(['start']))
+        .then(() => this.log('служба запущена'))
+        .catch((e) => this.log(`служба не запустилась: ${e.message}`));
+    }
+    await this.refreshNow().catch(() => {});
+    return true;
   }
 
   async setSettings(patch) {
@@ -675,8 +743,7 @@ class RealService extends EventEmitter {
     for (const k of Object.keys(DEFAULT_SETTINGS)) {
       if (typeof patch[k] === 'boolean') this.settings[k] = patch[k];
     }
-    await fsp.mkdir(this.configDir, { recursive: true });
-    await fsp.writeFile(this.settingsFile, JSON.stringify(this.settings, null, 2));
+    await this.saveSettings();
     const inst = this.installed();
     if (inst && prev.blockQuic !== this.settings.blockQuic) {
       this.quicSyncFailed = undefined;
@@ -689,7 +756,7 @@ class RealService extends EventEmitter {
     }
     if (prev.autostart !== this.settings.autostart) await this.applyAutostart();
     this.emitState();
-    return { ...this.settings };
+    return this.publicSettings();
   }
 
   autostartFile() {
