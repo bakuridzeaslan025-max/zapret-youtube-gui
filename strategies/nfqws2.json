@@ -9,9 +9,59 @@
     "note": "переведено разово translate_nfqws2.py, дальше поддерживается вручную",
     "placeholders": {
       "{FAKE}": "<zapret2>/files/fake"
+    },
+    "own": {
+      "note": "собственные стратегии (id own-*, winws=null), стоят первыми: blockcheck2 TEST=custom идёт по порядку строк",
+      "sources": {
+        "gateway-lenovo 2026-09": "zapret-yt.service на боевом шлюзе пользователя"
+      }
     }
   },
   "strategies": [
+    {
+      "id": "own-wssize-multidisorder",
+      "sources": [
+        "gateway-lenovo 2026-09"
+      ],
+      "winws": null,
+      "nfqws2": [
+        "--lua-desync=wssize:wsize=1:scale=6",
+        "--payload=tls_client_hello",
+        "--lua-desync=multidisorder:pos=host+1,midsld"
+      ],
+      "blockcheck2": "--comment=own-wssize-multidisorder --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=host+1,midsld",
+      "exact": true,
+      "risks": [
+        "wssize действует на SYN и пакеты до ClientHello — SYN должен попадать в очередь nfqws2",
+        "wssize не работает с hostlist (z2 manual.md:4992): на SYN имя хоста неизвестно — в сервисе нужен профиль без hostlist, иначе wssize молча не применяется",
+        "wsize=1 замедляет передачу до ClientHello (для всех соединений профиля)",
+        "чистый сплит без фейка: не обманывает DPI, собирающий TCP-поток (на стенде sni-drop-reasm — 0/4)"
+      ],
+      "notes": [
+        "объединение двух профилей боевого шлюза (Lenovo, городской проводной провайдер): multidisorder:pos=midsld для hostlist и pos=host+1 для youtubei.googleapis.com → pos=host+1,midsld режет и «youtube», и «youtubei»",
+        "wssize стоит ДО --payload: --payload фильтрует только последующие --lua-desync, а wssize нужен на пакетах без payload (SYN/ACK); после ClientHello — cutoff (zapret-antidpi.lua:337-355)"
+      ]
+    },
+    {
+      "id": "own-multidisorder-hostmid",
+      "sources": [
+        "gateway-lenovo 2026-09"
+      ],
+      "winws": null,
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=multidisorder:pos=host+1,midsld"
+      ],
+      "blockcheck2": "--comment=own-multidisorder-hostmid --payload=tls_client_hello --lua-desync=multidisorder:pos=host+1,midsld",
+      "exact": true,
+      "risks": [
+        "чистый сплит без фейка: не обманывает DPI, собирающий TCP-поток (на стенде sni-drop-reasm — 0/4)"
+      ],
+      "notes": [
+        "объединение двух профилей боевого шлюза (Lenovo, городской проводной провайдер): multidisorder:pos=midsld для hostlist и pos=host+1 для youtubei.googleapis.com → pos=host+1,midsld режет и «youtube», и «youtubei»",
+        "вариант без wssize: совместим с hostlist; если на реальном провайдере работает так же — wssize не нужен"
+      ]
+    },
     {
       "id": "flowseal-general-alt",
       "sources": [

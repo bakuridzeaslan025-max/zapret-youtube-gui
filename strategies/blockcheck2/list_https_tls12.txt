@@ -1,6 +1,13 @@
 # nfqws2 strategies for blockcheck2 TEST=custom (LIST_HTTPS_TLS12=<this file>)
 # translated once from flowseal 249a704 for zapret2 zapret2-v1.0.5.2; maintained by hand
 # each line is eval'd by blockcheck2 (custom/10-list.sh): $ZAPRET_BASE expands there
+# own-* first: own strategies (see strategies/README.md), then flowseal
+
+# own-wssize-multidisorder (gateway-lenovo 2026-09)
+--comment=own-wssize-multidisorder --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=host+1,midsld
+
+# own-multidisorder-hostmid (gateway-lenovo 2026-09)
+--comment=own-multidisorder-hostmid --payload=tls_client_hello --lua-desync=multidisorder:pos=host+1,midsld
 
 # flowseal-general-alt (general (ALT).bat)
 # winws: --ip-id=zero --dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin

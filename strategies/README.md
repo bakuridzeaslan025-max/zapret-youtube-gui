@@ -107,3 +107,19 @@ BATCH=1 TEST=custom SKIP_DNSCHECK=1 IPVS=4 ENABLE_HTTP=0 ENABLE_HTTP3=0 \
 живой прогон через NFQUEUE по loopback (все функции отработали, lua-ошибок нет) и
 `blockcheck2 SIMULATE=1 TEST=custom` (все 18×2 строк приняты). blockcheck2 нужны `hexdump` и
 `nslookup`/`host`.
+
+## Собственные стратегии (`own-*`)
+
+Не из flowseal: подобраны на боевом шлюзе пользователя и перенесены руками.
+
+- В `nfqws2.json`: id с префиксом `own-`, `winws: null`, `sources` — происхождение
+  (например `gateway-lenovo 2026-09`). В списках blockcheck2 — комментарий `# <id> (<источник>)`
+  без `# winws:`. `tests/strategies/check_consistency.py` это проверяет.
+- Стоят **первыми** в `nfqws2.json` и в обоих списках: blockcheck2 `TEST=custom` идёт по порядку
+  строк, а свои стратегии проверены на реальном провайдере.
+- `own-wssize-multidisorder` — `wssize` + `multidisorder:pos=host+1,midsld`. `wssize` действует на SYN
+  и пакеты до ClientHello, поэтому стоит до `--payload` и **не работает с hostlist** (z2
+  `manual.md:4992`): в сервисе для него нужен отдельный профиль без hostlist.
+- `own-multidisorder-hostmid` — то же без `wssize`, совместим с hostlist.
+- Обе — чистый сплит без фейков: против DPI, собирающего TCP-поток, не работают (для этого дальше
+  в очереди фейковые стратегии flowseal).
