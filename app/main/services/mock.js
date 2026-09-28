@@ -6,11 +6,12 @@
 
 const { EventEmitter } = require('events');
 
+// same order as the real helper checks them (hardest first)
 const HOSTS = [
-  { key: 'site', host: 'www.youtube.com' },
   { key: 'api', host: 'youtubei.googleapis.com' },
-  { key: 'thumbs', host: 'i.ytimg.com' },
+  { key: 'site', host: 'www.youtube.com' },
   { key: 'video', host: 'rr3---sn-n8v7kn7r.googlevideo.com' },
+  { key: 'thumbs', host: 'i.ytimg.com' },
 ];
 
 const STRATEGIES = [
@@ -217,7 +218,7 @@ class MockService extends EventEmitter {
     if (!this.st.installed) fail('NOT_INSTALLED');
     if (this.run) fail('BUSY');
     if (on && !this.st.strategy) fail('HELPER_FAILED');
-    await this.delay(400);
+    await this.delay(1500); // pkexec + systemd
     this.log(on ? `служба запущена, способ ${this.st.strategy.name}` : 'служба остановлена');
     this.update({ service: on ? 'on' : 'off' });
   }
@@ -358,7 +359,7 @@ class MockService extends EventEmitter {
     if (this.run) fail('BUSY');
     const s = STRATEGIES.find((x) => x.id === id);
     if (!s) fail('HELPER_FAILED');
-    await this.delay(500);
+    await this.delay(1200);
     this.strategyByNet[this.network.id] = { id: s.id, name: s.name, selectedAt: new Date().toISOString() };
     this.syncStrategy();
     this.log(`способ выбран вручную: ${s.name}`);

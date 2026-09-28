@@ -39,6 +39,15 @@ const SHOTS = [
     id: '6b-advanced', scenario: 'on', steps: [click('settings'), click('advanced'), waitText('Журнал событий'),
       async (p) => p.evaluate(() => { const s = document.getElementById('scroll'); s.scrollTop = document.querySelector('.adv').offsetTop - 60; })],
   },
+  { id: '5f-disabling', scenario: 'on', speed: 0.01, steps: [click('toggle'), waitText('Выключаем')] },
+  {
+    id: '6c-applying', scenario: 'on', speed: 0.01, steps: [click('settings'), click('advanced'), waitText('Журнал событий'),
+      async (p) => p.selectOption('#strategy', 'flowseal-general-alt11'), waitText('Применяем способ')],
+  },
+  {
+    id: '6d-applied', scenario: 'on', speed: 5, steps: [click('settings'), click('advanced'), waitText('Журнал событий'),
+      async (p) => p.selectOption('#strategy', 'flowseal-general-alt11'), async (p) => p.locator('.op-note.done').waitFor()],
+  },
   { id: '8a-limits', scenario: 'on', steps: [click('settings'), click('limits'), waitText('Что приложение не умеет')] },
   { id: 'x-close-warn', scenario: 'selecting-on-start', speed: 0.01, env: { YTU_TRAY: '0' }, steps: [waitText('Проверяем способ 5'), click('close'), waitText('Подбор продолжится')] },
   { id: 'x-error', scenario: 'helper-fail', speed: 4, steps: [click('recheck-select'), waitText('Что-то пошло не так')] },

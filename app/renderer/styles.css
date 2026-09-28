@@ -310,3 +310,6 @@ code, .mono { font-family: var(--font-mono); }
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 6px); } }
 .quick-sub { font-size: 13px; }
+.op-note { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--x-muted); }
+.op-note > .ph, .op-note > .ph-fill { font-size: 14px; color: var(--color-accent); }
+.op-note.done { color: var(--x-tint-text); }

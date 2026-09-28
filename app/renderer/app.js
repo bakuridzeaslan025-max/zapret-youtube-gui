@@ -2,6 +2,8 @@ import T from './i18n/ru.js';
 
 const HELP_URL = 'https://github.com/ytunblock/ytunblock#readme';
 const HOST_KEYS = ['site', 'api', 'thumbs', 'video'];
+// order the helper checks hosts in; the quick-select list follows hosts[] when present
+const CHECK_ORDER = ['api', 'site', 'video', 'thumbs'];
 const NET_ICONS = { wifi: 'ph-wifi-high', mobile: 'ph-cell-signal-high', ethernet: 'ph-network', other: 'ph-globe-simple' };
 const ONBOARDING = new Set(['welcome', 'installing', 'err-auth', 'err-missing', 'err-firewall', 'error']);
 
@@ -195,11 +197,10 @@ const screens = {
       const sub = T.quickSub(p.current, fmtQuickEta(p.etaSec));
       heading = `<h3>${esc(T.quickTitle(Math.min(p.done + 1, p.total), p.total))}</h3>${sub ? `<div class="small quick-sub">${esc(sub)}</div>` : ''}`;
     }
-    const hosts = (p && p.hosts) || HOST_KEYS.map((key) => ({ key, ok: null }));
-    const firstPending = p && p.hosts && !p.hosts.some((h) => h.ok === false) ? p.hosts.findIndex((h) => h.ok === null) : -1;
-    const rows = HOST_KEYS.map((key) => {
-      const i = hosts.findIndex((h) => h.key === key);
-      const h = hosts[i] || { ok: null };
+    const hosts = (p && p.hosts && p.hosts.filter((h) => T.hosts[h.key])) || CHECK_ORDER.map((key) => ({ key, ok: null }));
+    const firstPending = p && p.hosts && !hosts.some((h) => h.ok === false) ? hosts.findIndex((h) => h.ok === null) : -1;
+    const rows = hosts.map((h, i) => {
+      const key = h.key;
       const label = `<span class="grow">${esc(T.hosts[key])}</span>`;
       if (h.ok === true) return `<div class="host-row">${fillIcon('ph-check-circle')}${label}</div>`;
       if (h.ok === false) return `<div class="host-row failed">${icon('ph-x-circle')}${label}<span class="small">${esc(T.hostFailed)}</span></div>`;
@@ -295,7 +296,9 @@ const screens = {
     const selecting = svc === 'selecting';
     const on = svc === 'on' || svc === 'broken';
     let center;
-    if (svc === 'on') {
+    if (S.busy === 'enable' || S.busy === 'disable') {
+      center = `<div class="center main">${ringBadge('ph-power', 30, 'lg', 'spin')}<h1>${esc(S.busy === 'enable' ? T.enabling : T.disabling)}</h1><p class="lead">${esc(T.opWait)}</p></div>`;
+    } else if (svc === 'on') {
       center = `<div class="center main glow">${badge('ph-check', 'lg accent glow')}<h1>${esc(T.statusOn)}</h1><p class="lead">${esc(T.statusOnLead)}</p></div>`;
     } else if (svc === 'broken') {
       center = `<div class="center main">${badge('ph-warning', 'lg warn')}<h1>${esc(T.statusBroken)}</h1><p class="lead">${esc(T.statusBrokenLead)}</p>
@@ -326,13 +329,13 @@ const screens = {
     const netIcon = NET_ICONS[net ? net.kind : 'other'] || NET_ICONS.other;
     const protection = selecting
       ? `<div class="card-row dim"><span class="stack tight"><span class="t strong">${esc(T.protection)}</span><span class="s">${esc(T.protectionPaused)}</span></span>${toggle('toggle', false, { disabled: true })}</div>`
-      : `<div class="card-row"><span class="label strong">${esc(T.protection)}</span>${toggle('toggle', on, { shine: true, disabled: S.busy === 'toggle' })}</div>`;
+      : `<div class="card-row"><span class="label strong">${esc(T.protection)}</span>${toggle('toggle', S.busy === 'enable' || (on && S.busy !== 'disable'), { shine: true, disabled: !!S.busy })}</div>`;
     const banner = noStrategy && net && !selecting
       ? `<div class="banner">${icon(netIcon)}<span class="stack"><span class="t">${esc(T.newNetTitle)}</span><span class="s">${esc(T.newNetSub(net.label))}</span></span>${btn('select-quick', T.selectShort, 'btn-primary')}</div>`
       : '';
     const actions = svc === 'broken' || selecting ? '' : `<div class="row-btns">
-        ${btn('check', T.checkNow, 'btn-secondary btn-md', 'ph-arrows-clockwise')}
-        ${btn('select-quick', noStrategy ? T.selectShort : T.reselect, 'btn-secondary btn-md', 'ph-magic-wand')}
+        ${btn('check', T.checkNow, 'btn-secondary btn-md', 'ph-arrows-clockwise', !!S.busy)}
+        ${btn('select-quick', noStrategy ? T.selectShort : T.reselect, 'btn-secondary btn-md', 'ph-magic-wand', !!S.busy)}
       </div>`;
     return `${titlebar({ gear: true })}${banner}${center}
       <div class="main-foot">
@@ -352,15 +355,18 @@ const screens = {
     let adv = '';
     if (set.advanced) {
       const current = st.strategy ? st.strategy.id : '';
+      const shown = S.busy === 'apply' ? S.applyingId : current;
       const list = S.strategies || [];
       const options = (current ? '' : `<option value="" selected>${esc(T.strategyNone)}</option>`) + list.map((s) => {
         const notes = [s.id === current && T.strategyCurrent, s.exact === false && T.strategyApprox].filter(Boolean).join(', ');
-        return `<option value="${esc(s.id)}"${s.id === current ? ' selected' : ''}>${esc(s.name)}${notes ? ' — ' + esc(notes) : ''}</option>`;
+        return `<option value="${esc(s.id)}"${s.id === shown ? ' selected' : ''}>${esc(s.name)}${notes ? ' — ' + esc(notes) : ''}</option>`;
       }).join('');
       const cur = list.find((s) => s.id === current);
       adv = `<div class="adv">
         <div class="field"><label for="strategy">${esc(T.strategyFor(st.network && st.network.label))}</label>
-          <div class="select-wrap"><select id="strategy" class="input" data-change="apply-strategy"${st.service === 'selecting' ? ' disabled' : ''}>${options}</select>${icon('ph-caret-up-down')}</div></div>
+          <div class="select-wrap"><select id="strategy" class="input" data-change="apply-strategy"${st.service === 'selecting' || S.busy === 'apply' ? ' disabled' : ''}>${options}</select>${icon('ph-caret-up-down')}</div>
+          ${S.busy === 'apply' ? `<div class="op-note">${icon('ph-circle-notch', 'spin')}${esc(T.applying)}</div>`
+            : S.applied ? `<div class="op-note done">${fillIcon('ph-check-circle')}${esc(T.applied)}</div>` : ''}</div>
         ${cur && cur.args ? `<div class="field"><label>${esc(T.params)}</label><div class="sunk">${esc(cur.args)}</div></div>` : ''}
         <div class="field"><label>${esc(T.log)}</label><div class="sunk log" id="log">${esc(S.log || T.logEmpty)}</div></div>
         ${btn('copy-report', T.copyReport, 'btn-secondary btn-md', 'ph-copy')}
@@ -552,6 +558,7 @@ const actions = {
   'cancel-close': () => go(S.prevScreen || 'main'),
   back: () => go(S.screen === 'limits' && S.cameFromSettings ? 'settings' : 'main'),
   settings: async () => {
+    S.applied = false;
     S.settings = await window.api.getSettings();
     if (S.settings.advanced) await loadAdvanced();
     go('settings');
@@ -581,10 +588,11 @@ const actions = {
     const st = S.state;
     const on = st.service === 'on' || st.service === 'broken';
     if (!on && !st.strategy) return runCheck('toggle');
-    S.busy = 'toggle';
+    S.busy = on ? 'disable' : 'enable';
     render();
     try {
       await window.api.setEnabled(!on);
+      S.state = await window.api.getState();
     } catch (e) {
       S.busy = null;
       return showError(e);
@@ -633,14 +641,22 @@ app.addEventListener('click', (ev) => {
 
 app.addEventListener('change', async (ev) => {
   if (ev.target.dataset.change !== 'apply-strategy' || !ev.target.value) return;
+  S.busy = 'apply';
+  S.applied = false;
+  const id = ev.target.value;
+  S.applyingId = id;
+  render();
   try {
-    await window.api.applyStrategy(ev.target.value);
+    await window.api.applyStrategy(id);
     S.state = await window.api.getState();
     S.log = await window.api.getLog(200);
-    toast(T.applied);
   } catch (e) {
-    showError(e);
+    S.busy = null;
+    return showError(e);
   }
+  S.busy = null;
+  S.applied = true;
+  render();
 });
 
 document.addEventListener('keydown', (ev) => {
