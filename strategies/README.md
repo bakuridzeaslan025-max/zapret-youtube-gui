@@ -117,9 +117,9 @@ BATCH=1 TEST=custom SKIP_DNSCHECK=1 IPVS=4 ENABLE_HTTP=0 ENABLE_HTTP3=0 \
   без `# winws:`. `tests/strategies/check_consistency.py` это проверяет.
 - Стоят **первыми** в `nfqws2.json` и в обоих списках: blockcheck2 `TEST=custom` идёт по порядку
   строк, а свои стратегии проверены на реальном провайдере.
-- `own-wssize-multidisorder` — `wssize` + `multidisorder:pos=host+1,midsld`. `wssize` действует на SYN
-  и пакеты до ClientHello, поэтому стоит до `--payload` и **не работает с hostlist** (z2
-  `manual.md:4992`): в сервисе для него нужен отдельный профиль без hostlist.
-- `own-multidisorder-hostmid` — то же без `wssize`, совместим с hostlist.
-- Обе — чистый сплит без фейков: против DPI, собирающего TCP-поток, не работают (для этого дальше
-  в очереди фейковые стратегии flowseal).
+- `own-multidisorder-hostmid` — `multidisorder:pos=host+1,midsld` (объединение двух профилей шлюза:
+  `midsld` для youtube и `host+1` для youtubei). Чистый сплит без фейков: против DPI, собирающего
+  TCP-поток, не работает (для этого дальше в очереди фейковые стратегии flowseal).
+- Был `own-wssize-multidisorder` (то же + `wssize:wsize=1:scale=6`) — удалён 28.09.2026: на боевом
+  тесте (Manjaro, городской провайдер) без `wssize` работает так же, а `wssize` тормозит начало
+  соединений и не работает с hostlist (z2 `manual.md:4992`).

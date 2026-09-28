@@ -3,8 +3,6 @@
 # each line is eval'd by blockcheck2 (custom/10-list.sh): $ZAPRET_BASE expands there
 # own-* first: own strategies (see strategies/README.md), then flowseal
 
-# own-wssize-multidisorder (gateway-lenovo 2026-09)
---comment=own-wssize-multidisorder --lua-desync=wssize:wsize=1:scale=6 --payload=tls_client_hello --lua-desync=multidisorder:pos=host+1,midsld
 
 # own-multidisorder-hostmid (gateway-lenovo 2026-09)
 --comment=own-multidisorder-hostmid --payload=tls_client_hello --lua-desync=multidisorder:pos=host+1,midsld
