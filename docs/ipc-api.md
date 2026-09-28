@@ -79,9 +79,25 @@ type Settings = { autostart: boolean, blockQuic: boolean, perNetwork: boolean, a
 | `start` / `stop` | systemd-юнит `ytunblock.service` + nft-таблица `inet ytunblock` |
 | `apply <strategy-id>` | записать активную стратегию (для `default` или сети), перезапустить сервис |
 | `select quick\|deep [--network ID]` | остановить сервис, прогнать blockcheck2, JSON-lines прогресса, в конце результат; сервис вернуть в прежнее состояние |
+| `select-follow` | подключиться к идущему подбору: отдать уже накопленный прогресс и дальше JSON-lines до конца; если подбора нет — последний результат |
 | `cancel` | прервать идущий подбор |
 | `set-quic on\|off` | правило nft: drop UDP/443 к hostlist (ipset/nft set по резолву) |
 | `uninstall` | удалить всё поставленное (юнит, nft, /opt, polkit, AppArmor-профиль) |
 
 Проверка доступности (`checkNow`) и определение сети — в main, без root (curl/Node https с
 `--resolve`, nmcli/`ip route`).
+
+## Подбор живёт отдельно от GUI
+
+`select` запускается helper'ом отвязанно от вызывающего процесса (transient systemd-unit
+`ytunblock-select` через `systemd-run`), прогресс пишется в `/run/ytunblock/select.jsonl`,
+итог — в `/var/lib/ytunblock/last-select.json`. GUI можно закрыть — подбор продолжится.
+При старте main видит `service: 'selecting'` и переподключается через `select-follow`.
+
+## Закрытие окна
+
+Трей есть ⇔ на session bus есть владелец `org.kde.StatusNotifierWatcher`
+(на XEmbed-only окружениях это ложноотрицательно — допустимо: GUI просто закроется).
+- Трей есть: закрытие прячет окно в трей (при первом разе — уведомление «свёрнуто в трей»).
+- Трея нет: закрытие завершает GUI; обход продолжает работать в systemd. Если идёт подбор —
+  перед закрытием предупреждение «подбор продолжится, результат увидите при следующем запуске».
