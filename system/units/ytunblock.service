@@ -1,0 +1,17 @@
+[Unit]
+Description=YouTube Unblock (zapret2 nfqws2)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStartPre=/opt/ytunblock/bin/ytu-helper _pre-start
+ExecStart=/opt/ytunblock/bin/ytu-helper _run
+ExecStopPost=/opt/ytunblock/bin/ytu-helper _post-stop
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

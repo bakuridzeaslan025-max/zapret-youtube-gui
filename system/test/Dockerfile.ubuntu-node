@@ -1,0 +1,2 @@
+FROM ytu-test-ubuntu:arm64
+RUN apt-get update && apt-get install -y --no-install-recommends nodejs dbus network-manager && rm -rf /var/lib/apt/lists/*

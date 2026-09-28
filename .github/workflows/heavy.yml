@@ -1,0 +1,62 @@
+name: heavy
+
+on:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heavy-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  dpi-stand:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # containers get NET_ADMIN, not SYS_MODULE: NFQUEUE / -m string modules come from the host kernel
+      - run: sudo modprobe -a nfnetlink_queue nft_queue nft_compat xt_NFQUEUE xt_string
+      - name: fetch zapret2 release
+        run: |
+          v=$(sed -n 's/^VERSION=//p' system/fetch-zapret2.sh)
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/zapret2.tar.gz" \
+            "https://github.com/bol-van/zapret2/releases/download/$v/zapret2-$v.tar.gz"
+      - run: tests/dpi-stand/run.sh all
+        env:
+          ZAPRET2_TARBALL: ${{ runner.temp }}/zapret2.tar.gz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: dpi-stand-logs
+          path: tests/dpi-stand/.cache/logs
+          retention-days: 14
+      - if: always()
+        run: tests/dpi-stand/run.sh down
+
+  system:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu, fedora]
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    env:
+      IMAGE: ytu-test-${{ matrix.distro }}:${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sudo modprobe -a nfnetlink_queue nft_queue
+      - name: fetch zapret2 -> system/vendor
+        run: |
+          v=$(sed -n 's/^VERSION=//p' system/fetch-zapret2.sh)
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/zapret2.tar.gz" \
+            "https://github.com/bol-van/zapret2/releases/download/$v/zapret2-$v.tar.gz"
+          sh system/fetch-zapret2.sh "$RUNNER_TEMP/zapret2.tar.gz"
+      - run: docker build -t "$IMAGE" -f "system/test/Dockerfile.${{ matrix.distro }}" system/test
+      # native arch on every runner -> systemd works -> full mode
+      - run: sh system/test/run-tests.sh "$IMAGE" "linux/${{ matrix.arch }}" full

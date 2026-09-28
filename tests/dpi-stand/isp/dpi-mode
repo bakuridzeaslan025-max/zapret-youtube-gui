@@ -1,0 +1,48 @@
+#!/bin/sh
+# dpi-mode none|sni-drop|sni-drop-reasm|blackhole — switch the fake DPI at runtime.
+set -eu
+: "${SERVER_IP:?}"
+TOKENS=${DPI_TOKENS:-youtube youtubei ytimg googlevideo}
+QNUM=77
+CHAIN=DPI
+
+mode=${1:?usage: dpi-mode none|sni-drop|sni-drop-reasm|blackhole}
+case "$mode" in
+	none|sni-drop|sni-drop-reasm|blackhole) ;;
+	*) echo "unknown DPI mode: $mode" >&2; exit 2 ;;
+esac
+
+PIDF=/run/reasm_dpi.pid
+if [ -f $PIDF ]; then
+	pid=$(cat $PIDF)
+	kill "$pid" 2>/dev/null || true
+	i=0
+	while [ -d /proc/"$pid" ]; do
+		i=$((i + 1)); [ $i -lt 50 ] || { echo "reasm_dpi.py (pid $pid) did not exit" >&2; exit 2; }
+		sleep 0.1
+	done
+	rm -f $PIDF
+fi
+iptables -N $CHAIN 2>/dev/null || iptables -F $CHAIN
+iptables -C FORWARD -j $CHAIN 2>/dev/null || iptables -I FORWARD -j $CHAIN
+
+case "$mode" in
+	sni-drop)
+		for t in $TOKENS; do
+			iptables -A $CHAIN -d "$SERVER_IP" -p tcp --dport 443 -m string --algo bm --icase --string "$t" -j DROP
+		done
+		;;
+	sni-drop-reasm)
+		DPI_TOKENS="$TOKENS" python3 /usr/local/bin/reasm_dpi.py $QNUM >>/var/log/reasm_dpi.log 2>&1 &
+		echo $! >$PIDF
+		sleep 0.5
+		# No --queue-bypass: a dead handler must not turn into a silent pass.
+		grep -q '^State:[[:space:]]*[^Z]' /proc/$!/status 2>/dev/null || { tail -5 /var/log/reasm_dpi.log >&2; echo "reasm_dpi.py failed" >&2; exit 2; }
+		iptables -A $CHAIN -d "$SERVER_IP" -p tcp --dport 443 -j NFQUEUE --queue-num $QNUM
+		;;
+	blackhole)
+		iptables -A $CHAIN -d "$SERVER_IP" -j DROP
+		;;
+esac
+echo "$mode" >/run/dpi-mode
+echo "DPI mode: $mode"

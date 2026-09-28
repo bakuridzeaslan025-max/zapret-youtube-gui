@@ -1,0 +1,3 @@
+#!/bin/sh
+# test stub: nft always "works" (no netfilter in a non-privileged container), lists nothing
+exit 0

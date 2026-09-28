@@ -11,6 +11,7 @@
     "mock": "YTU_SERVICE=mock electron .",
     "icons": "electron scripts/gen-icons.js",
     "screenshots": "node scripts/screenshots.js",
+    "predist": "sh ../system/fetch-zapret2.sh",
     "dist": "electron-builder --linux AppImage --x64 --arm64"
   },
   "devDependencies": {
@@ -27,6 +28,30 @@
       "assets/**",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "../system",
+        "to": "payload/system",
+        "filter": [
+          "**/*",
+          "!test/**",
+          "!fetch-zapret2.sh",
+          "!.gitignore"
+        ]
+      },
+      {
+        "from": "../strategies",
+        "to": "payload/strategies",
+        "filter": [
+          "nfqws2.json",
+          "hostlist-youtube.txt",
+          "blockcheck2/*.txt"
+        ]
+      }
+    ],
+    "toolsets": {
+      "appimage": "1.0.3"
+    },
     "linux": {
       "target": [
         {
@@ -37,6 +62,7 @@
           ]
         }
       ],
+      "executableName": "ytunblock",
       "icon": "build/icon.png",
       "category": "Network"
     }

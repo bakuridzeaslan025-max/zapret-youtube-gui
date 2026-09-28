@@ -1,0 +1,6 @@
+FROM fedora:42
+RUN dnf install -y -q systemd kmod iproute polkit procps-ng util-linux && dnf clean all
+# privileged systemd containers otherwise unregister the Docker VM's binfmt (qemu) handlers on stop
+RUN ln -sf /dev/null /etc/systemd/system/systemd-binfmt.service
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]

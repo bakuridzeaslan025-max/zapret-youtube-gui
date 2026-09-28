@@ -1,0 +1,12 @@
+#!/bin/sh
+# Minimal nslookup for blockcheck2 when bind tools are absent (Arch/Manjaro, minimal installs).
+# blockcheck2 only checks it exists (dnstest/lookup4 run in check_dns, skipped by SKIP_DNSCHECK=1);
+# the output mimics nslookup: 3 header lines, then "Address: <ipv4>". The server argument is ignored.
+name=$1
+[ -n "$name" ] || exit 1
+ips=$(getent ahostsv4 "$name" 2>/dev/null | awk '!seen[$1]++ {print $1}')
+[ -n "$ips" ] || { echo "** server can't find $name: NXDOMAIN"; exit 1; }
+printf 'Server:\t\tsystem\nAddress:\tsystem#53\n\nNon-authoritative answer:\n'
+for ip in $ips; do
+	printf 'Name:\t%s\nAddress: %s\n' "$name" "$ip"
+done

@@ -1,0 +1,79 @@
+name: appimage
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: App version (semver without "v"); empty = package.json
+        type: string
+        default: ''
+      arm64:
+        description: Also build arm64 (on ubuntu-24.04-arm)
+        type: boolean
+        default: false
+      retention-days:
+        type: number
+        default: 7
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        arch: ${{ fromJSON(inputs.arm64 && '["x64","arm64"]' || '["x64"]') }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ inputs.version }}
+      ARCH: ${{ matrix.arch }}
+      APPIMAGE_ARCH: ${{ matrix.arch == 'arm64' && 'aarch64' || 'x86_64' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: fetch zapret2 -> system/vendor
+        run: |
+          v=$(sed -n 's/^VERSION=//p' system/fetch-zapret2.sh)
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/zapret2.tar.gz" \
+            "https://github.com/bol-van/zapret2/releases/download/$v/zapret2-$v.tar.gz"
+          sh system/fetch-zapret2.sh "$RUNNER_TEMP/zapret2.tar.gz"
+      - run: npm ci --no-audit --no-fund
+        working-directory: app
+      - name: electron-builder
+        working-directory: app
+        run: |
+          [ -n "$VERSION" ] || VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >>"$GITHUB_ENV"
+          npx electron-builder --linux AppImage "--$ARCH" --publish never -c.extraMetadata.version="$VERSION"
+          f=$(ls dist/*.AppImage)
+          [ "$(echo "$f" | wc -l)" -eq 1 ] || { echo "expected one AppImage: $f"; exit 1; }
+          mkdir -p ../out
+          mv "$f" "../out/ytunblock-$VERSION-$APPIMAGE_ARCH.AppImage"
+      - name: verify payload
+        working-directory: ${{ runner.temp }}
+        run: |
+          img=$(ls "$GITHUB_WORKSPACE"/out/*.AppImage)
+          "$img" --appimage-extract >/dev/null
+          p=squashfs-root/resources/payload
+          for f in system/install.sh system/uninstall.sh system/bin/ytu-helper system/lib/common.sh \
+            system/vendor/zapret2/VERSION system/vendor/zapret2/lua/zapret-lib.lua \
+            system/vendor/zapret2/binaries/linux-x86_64/nfqws2 system/vendor/zapret2/binaries/linux-arm64/nfqws2 \
+            strategies/nfqws2.json strategies/hostlist-youtube.txt \
+            strategies/blockcheck2/list_https_tls12.txt strategies/blockcheck2/list_https_tls13.txt; do
+            [ -f "$p/$f" ] || { echo "missing $p/$f"; exit 1; }
+          done
+          [ ! -e "$p/system/test" ] && [ ! -e "$p/system/fetch-zapret2.sh" ] || { echo "test files leaked into payload"; exit 1; }
+          [ -x squashfs-root/ytunblock ] || { echo "no ytunblock executable"; exit 1; }
+          case $ARCH in arm64) z=linux-arm64 ;; *) z=linux-x86_64 ;; esac
+          "$p/system/vendor/zapret2/binaries/$z/nfqws2" --version
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: out/*.AppImage
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error

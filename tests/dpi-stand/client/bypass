@@ -1,0 +1,61 @@
+#!/bin/sh
+# bypass start '<nfqws2 desync args>' | stop | status
+# Manual zapret-like setup: nft queue for tcp/443 + nfqws2 in background.
+# Args are eval'd like blockcheck2 does ($ZAPRET_BASE expands, quotes work).
+set -eu
+ZAPRET_BASE=${ZAPRET_BASE:-/opt/zapret2}
+QNUM=200
+MARK=0x40000000
+LOG=/var/log/nfqws2.log
+PIDF=/run/bypass-nfqws2.pid
+
+# kill -0 is true for a zombie too: nfqws2 is our unreaped child until this shell exits
+# (after that init reaps it)
+alive() {
+	st=$(sed -n 's/^State:[[:space:]]*\(.\).*/\1/p' "/proc/$1/status" 2>/dev/null)
+	[ -n "$st" ] && [ "$st" != Z ]
+}
+
+stop() {
+	pkill -x nfqws2 2>/dev/null || true
+	i=0
+	while pgrep -x nfqws2 >/dev/null; do
+		i=$((i + 1)); [ $i -lt 50 ] || { echo "nfqws2 did not exit" >&2; exit 1; }
+		sleep 0.1
+	done
+	rm -f $PIDF
+	nft delete table inet zstand 2>/dev/null || true
+}
+
+case "${1:-}" in
+	start)
+		[ $# -ge 2 ] || { echo "usage: bypass start '<args>'" >&2; exit 2; }
+		stop
+		nft -f - <<EOF
+table inet zstand {
+	chain post {
+		type filter hook postrouting priority mangle;
+		tcp dport 443 ct original packets 1-12 meta mark and $MARK == 0 queue num $QNUM bypass
+	}
+	chain pre {
+		type filter hook prerouting priority filter;
+		tcp sport 443 ct reply packets 1-12 queue num $QNUM bypass
+	}
+	chain predefrag {
+		type filter hook output priority -401;
+		meta mark and $MARK != 0 notrack
+	}
+}
+EOF
+		eval "set -- $2"
+		"$ZAPRET_BASE/nfq2/nfqws2" --qnum=$QNUM --fwmark=$MARK \
+			--lua-init=@"$ZAPRET_BASE/lua/zapret-lib.lua" --lua-init=@"$ZAPRET_BASE/lua/zapret-antidpi.lua" \
+			--filter-tcp=443 "$@" >$LOG 2>&1 &
+		echo $! >$PIDF
+		sleep 0.5
+		alive $! || { wait $! || true; cat $LOG >&2; stop; exit 1; }
+		;;
+	stop) stop ;;
+	status) pgrep -ax nfqws2 || echo "nfqws2 not running" ;;
+	*) echo "usage: bypass start '<args>' | stop | status" >&2; exit 2 ;;
+esac

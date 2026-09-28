@@ -1,0 +1,55 @@
+name: dpi-stand
+
+x-net: &net
+  init: true
+  restart: "no"
+  cap_add: [NET_ADMIN, NET_RAW]
+
+networks:
+  lan:
+    ipam:
+      config: [{ subnet: 10.66.1.0/24 }]
+  wan:
+    ipam:
+      config: [{ subnet: 10.66.2.0/24 }]
+
+volumes:
+  pki:
+
+services:
+  server:
+    restart: "no"
+    build: server
+    networks:
+      wan: { ipv4_address: 10.66.2.10 }
+    volumes:
+      - pki:/pki
+    sysctls:
+      net.ipv4.tcp_timestamps: "1"
+
+  isp:
+    <<: *net
+    build: isp
+    environment:
+      DPI_MODE: ${DPI_MODE:-none}
+      REASM_TRACK_ISN: ${REASM_TRACK_ISN:-1}
+      SERVER_IP: 10.66.2.10
+    networks:
+      lan: { ipv4_address: 10.66.1.2 }
+      wan: { ipv4_address: 10.66.2.2 }
+    sysctls:
+      net.ipv4.ip_forward: "1"
+
+  client:
+    <<: *net
+    build: client
+    depends_on: [isp, server]
+    environment:
+      ISP_IP: 10.66.1.2
+    networks:
+      lan: { ipv4_address: 10.66.1.10 }
+    volumes:
+      - pki:/pki:ro
+      - ../..:/repo:ro
+    sysctls:
+      net.ipv4.tcp_timestamps: "1"

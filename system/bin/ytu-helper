@@ -1,0 +1,740 @@
+#!/bin/sh
+# shellcheck disable=SC3043
+# ytunblock root helper. Contract: docs/ipc-api.md. Called via pkexec;
+# `status` and `select-follow` also work unprivileged (read-only).
+
+# shellcheck source=../lib/common.sh
+. "$(dirname "$0")/../lib/common.sh"
+
+# deep scan: blockcheck2 v1.0.5.2 standard TLS 1.3 test count for one domain when nothing works
+# (SIMULATE=1 SIM_SUCCESS_RATE=0 SCANLEVEL=quick MAX_TTL=0 MAX_AUTOTTL_DELTA=0), IPVS=4 and IPVS=46
+# (v6 adds its own foolings); progress estimate only
+DEEP_EST_TESTS=2002
+DEEP_EST_TESTS46=5079
+DEEP_MAX_CANDIDATES=40
+SELECT_CURL_MAX_TIME=3
+
+SEL_JSONL=$YTU_RUN/select.jsonl
+SEL_STATE=$YTU_STATE/select.state
+SEL_LAST=$YTU_STATE/last-select.json
+
+need_root() { is_root || die AUTH_FAILED "root required"; }
+need_installed() { [ -x "$YTU_Z2/nfq2/nfqws2" ] || die NOT_INSTALLED "ytunblock is not installed"; }
+
+now_iso() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+
+selecting()
+{
+	case "$(systemctl is-active "$YTU_SELECT_UNIT" 2>/dev/null)" in
+		active|activating|deactivating) return 0 ;;
+	esac
+	return 1
+}
+
+service_state()
+{
+	if selecting; then
+		echo selecting
+		return
+	fi
+	case "$(systemctl is-active "$YTU_UNIT" 2>/dev/null)" in
+		active|activating|reloading) echo on ;;
+		failed) echo failed ;;
+		*) echo off ;;
+	esac
+}
+
+# root: a selection that died without its trap (kill -9, reboot) leaves blockcheck2 tables
+# and a stopped service behind
+recover_stale()
+{
+	local prev
+	is_root || return 0
+	selecting && return 0
+	nft_drop_blockcheck_tables
+	[ -f "$SEL_STATE" ] || return 0
+	prev=$(kv_get "$SEL_STATE" prev)
+	[ -s "$SEL_LAST" ] || printf '{"event":"done","mode":"%s","found":false,"reason":"interrupted"}\n' \
+		"$(kv_get "$SEL_STATE" mode)" >"$SEL_LAST"
+	rm -f "$SEL_STATE"
+	ytu_log "recovered after interrupted select, prev=$prev"
+	if [ "$prev" = on ]; then
+		systemctl reset-failed "$YTU_UNIT" 2>/dev/null
+		systemctl start --no-block "$YTU_UNIT"
+	fi
+}
+
+strategy_json()
+{
+	# $1 - strategy file, $2 - scope
+	local id at
+	id=$(kv_get "$1" id)
+	[ -n "$id" ] || { printf 'null'; return; }
+	at=$(kv_get "$1" selectedAt)
+	printf '{"id":%s,"selectedAt":%s' "$(json_str "$id")" "$(json_str "$at")"
+	[ -n "$2" ] && printf ',"scope":%s' "$(json_str "$2")"
+	printf '}'
+}
+
+write_strategy()
+{
+	# $1 - network id or empty, $2 - strategy id
+	local f
+	f=$(strategy_file "$1")
+	mkdir -p "$YTU_STATE/strategy"
+	printf 'id=%s\nselectedAt=%s\n' "$2" "$(now_iso)" >"$f.tmp" && mv -f "$f.tmp" "$f"
+	# first strategy ever also becomes the fallback for networks without their own
+	[ -n "$1" ] && [ ! -f "$(strategy_file "")" ] && cp "$f" "$(strategy_file "")"
+	return 0
+}
+
+set_network()
+{
+	# $1 - network id or empty (no per-network context)
+	if [ -n "$1" ]; then
+		printf '%s\n' "$1" >"$YTU_STATE/network"
+	else
+		rm -f "$YTU_STATE/network"
+	fi
+}
+
+cmd_status()
+{
+	local installed=false f scope net first ver
+	recover_stale
+	[ -x "$YTU_Z2/nfq2/nfqws2" ] && installed=true
+	ver=$(cat "$YTU_ROOT/VERSION" 2>/dev/null)
+	net=$(current_network)
+	printf '{"installed":%s,"version":%s,"service":"%s","enabled":%s' \
+		$installed "$(json_str "$ver")" "$(service_state)" \
+		"$(systemctl is-enabled --quiet "$YTU_UNIT" 2>/dev/null && echo true || echo false)"
+	if [ -n "$net" ]; then printf ',"network":%s' "$(json_str "$net")"; else printf ',"network":null'; fi
+	printf ',"strategy":'
+	if f=$(effective_strategy_file); then
+		scope=default
+		case "$f" in */net-*) scope=network ;; esac
+		strategy_json "$f" $scope
+	else
+		printf 'null'
+	fi
+	printf ',"strategies":{"default":'
+	strategy_json "$(strategy_file "")"
+	printf ',"networks":{'
+	first=1
+	for f in "$YTU_STATE"/strategy/net-*; do
+		[ -f "$f" ] || continue
+		[ $first = 1 ] || printf ','
+		first=0
+		printf '%s:' "$(json_str "${f##*/net-}")"
+		strategy_json "$f"
+	done
+	printf '}},"custom":['
+	first=1
+	for f in "$YTU_STATE"/custom/*.args; do
+		[ -f "$f" ] || continue
+		[ $first = 1 ] || printf ','
+		first=0
+		f=${f##*/}
+		printf '{"id":%s,"args":%s}' "$(json_str "${f%.args}")" "$(json_str "$(cat "$YTU_STATE/custom/$f")")"
+	done
+	printf '],"quic":%s,"videoHost":%s,"requirements":%s}\n' \
+		"$([ "$(quic_state)" = on ] && echo true || echo false)" "$(json_str "$YTU_VIDEO_HOST")" "$(requirements_json)"
+}
+
+check_can_run()
+{
+	local m c
+	m=$(requirements_hard_missing)
+	[ -z "$m" ] || die MISSING_REQUIREMENTS "missing: $m"
+	c=$(firewall_conflicts)
+	[ -z "$c" ] || die FIREWALL_CONFLICT "$c"
+}
+
+lock_or_busy()
+{
+	mkdir -p "$YTU_RUN"
+	selecting && die BUSY "strategy selection is running"
+	exec 8>"$YTU_RUN/lock"
+	flock -n 8 || die BUSY "another helper command is running"
+}
+
+wait_active()
+{
+	local i=0
+	while [ $i -lt 20 ]; do
+		case "$(systemctl is-active "$YTU_UNIT" 2>/dev/null)" in
+			active)
+				sleep 1
+				systemctl is-active --quiet "$YTU_UNIT" && return 0
+				;;
+			failed|inactive) return 1 ;;
+		esac
+		sleep 0.25
+		i=$((i + 1))
+	done
+	return 1
+}
+
+service_fail()
+{
+	die HELPER_FAILED "service failed to start: $(journalctl -u "$YTU_UNIT" -n 5 --no-pager -o cat 2>/dev/null | tail -n 5)"
+}
+
+restart_if_active()
+{
+	if systemctl is-active --quiet "$YTU_UNIT"; then
+		systemctl reset-failed "$YTU_UNIT" 2>/dev/null
+		{ systemctl restart "$YTU_UNIT" && wait_active; } || service_fail
+	fi
+}
+
+cmd_start()
+{
+	need_root
+	need_installed
+	lock_or_busy
+	recover_stale
+	check_can_run
+	effective_strategy_file >/dev/null || die HELPER_FAILED "no strategy selected"
+	systemctl reset-failed "$YTU_UNIT" 2>/dev/null
+	systemctl enable "$YTU_UNIT" >/dev/null 2>&1
+	systemctl restart "$YTU_UNIT" || service_fail
+	wait_active || service_fail
+	ytu_log "start ok"
+	echo '{"ok":true}'
+}
+
+cmd_stop()
+{
+	need_root
+	need_installed
+	lock_or_busy
+	systemctl disable "$YTU_UNIT" >/dev/null 2>&1
+	systemctl stop "$YTU_UNIT"
+	systemctl reset-failed "$YTU_UNIT" 2>/dev/null
+	ytu_log "stop"
+	echo '{"ok":true}'
+}
+
+parse_network_opt()
+{
+	# sets NETWORK from "--network ID"
+	NETWORK=
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			--network)
+				valid_id "${2:-}" || die HELPER_FAILED "bad network id"
+				NETWORK=$2
+				shift 2
+				;;
+			*) die HELPER_FAILED "unknown argument" ;;
+		esac
+	done
+}
+
+# apply <strategy-id|-> [--network ID]; "-" only switches the network context
+cmd_apply()
+{
+	local id=$1
+	need_root
+	need_installed
+	[ -n "$id" ] || die HELPER_FAILED "strategy id required"
+	shift
+	parse_network_opt "$@"
+	lock_or_busy
+	if [ "$id" != - ]; then
+		{ valid_id "$id" && strategy_exists "$id"; } || die HELPER_FAILED "unknown strategy"
+		write_strategy "$NETWORK" "$id"
+	fi
+	set_network "$NETWORK"
+	ytu_log "apply $id network=$NETWORK"
+	restart_if_active
+	echo '{"ok":true}'
+}
+
+cmd_set_quic()
+{
+	need_root
+	need_installed
+	case "$1" in
+		on|off) ;;
+		*) die HELPER_FAILED "usage: set-quic on|off" ;;
+	esac
+	lock_or_busy
+	echo "$1" >"$YTU_STATE/quic"
+	ytu_log "set-quic $1"
+	restart_if_active
+	echo '{"ok":true}'
+}
+
+cmd_cancel()
+{
+	need_root
+	if selecting; then
+		# the unit's TERM trap restores the service; recover_stale covers a trap that did not finish
+		systemctl stop "$YTU_SELECT_UNIT"
+		recover_stale
+		ytu_log "cancel"
+		echo '{"ok":true,"running":true}'
+	else
+		recover_stale
+		echo '{"ok":true,"running":false}'
+	fi
+}
+
+# ---- systemd unit hooks ----
+
+cmd_pre_start()
+{
+	local c
+	modprobe -q nfnetlink_queue 2>/dev/null
+	c=$(firewall_conflicts)
+	[ -z "$c" ] || { echo "conflict: $c" >&2; exit 1; }
+	effective_strategy_file >/dev/null || { echo "no strategy selected" >&2; exit 1; }
+	nft_ruleset | nft -f - || exit 1
+}
+
+cmd_run()
+{
+	local f id a hl l
+	f=$(effective_strategy_file) || { echo "no strategy selected" >&2; exit 1; }
+	id=$(kv_get "$f" id)
+	a=$(strategy_args "$id") || { echo "strategy $id not found or refused" >&2; exit 1; }
+	set --
+	case "$a" in
+		--comment=*) ;;
+		*) set -- "--comment=$id" ;;
+	esac
+	while IFS= read -r l; do
+		set -- "$@" "$l"
+	done <<EOF
+$a
+EOF
+	# SYN carries no hostname, so a hostlist profile never sees it (CLAUDE.md, ALT5)
+	hl="--hostlist=$YTU_HOSTLIST"
+	case " $* " in
+		*syndata*) hl= ;;
+	esac
+	if [ "$(quic_state)" = on ]; then
+		set -- "$@" --new --filter-udp=443 --filter-l7=quic --hostlist="$YTU_HOSTLIST" --lua-desync=drop
+	fi
+	# wssize acts from the SYN on, before the hostname is known: with a hostlist it needs the
+	# ip->hostname cache (manual: "техника нулевой фазы"), so it misses only the first connection per IP
+	case " $* " in
+		*wssize*) set -- --ipcache-hostname=1 "$@" ;;
+	esac
+	echo "strategy $id ($f), quic block $(quic_state)" >&2
+	exec "$YTU_Z2/nfq2/nfqws2" --qnum=$YTU_QNUM --fwmark=$YTU_MARK \
+		--lua-init=@"$YTU_Z2/lua/zapret-lib.lua" --lua-init=@"$YTU_Z2/lua/zapret-antidpi.lua" \
+		--filter-tcp=443 ${hl:+"$hl"} "$@"
+}
+
+cmd_post_stop()
+{
+	nft delete table inet $YTU_NFT 2>/dev/null
+	return 0
+}
+
+# ---- select ----
+
+# check hosts for the current candidate: passed domains are true, the rest not yet known.
+# Valid because candidates are filtered domain by domain (verify_candidates).
+hosts_json()
+{
+	local h first=1
+	printf '['
+	for h in $YTU_CHECK_HOSTS; do
+		[ $first = 1 ] || printf ','
+		first=0
+		case " $SEL_PASSED " in
+			*" $h "*) printf '{"host":"%s","ok":true}' "$h" ;;
+			*) printf '{"host":"%s","ok":null}' "$h" ;;
+		esac
+	done
+	printf ']'
+}
+
+emit_progress()
+{
+	# $1 done, $2 total, $3 current
+	local now el eta=null
+	now=$(date +%s)
+	el=$((now - SEL_START))
+	[ "$1" -gt 0 ] && [ "$2" -gt "$1" ] && eta=$((el * ($2 - $1) / $1))
+	[ "$1" -gt 0 ] && [ "$2" -le "$1" ] && eta=0
+	printf '{"event":"progress","mode":"%s","done":%s,"total":%s,"current":%s,"etaSec":%s,"startedAt":"%s","hosts":%s}\n' \
+		"$SEL_MODE" "$1" "$2" "$(if [ -n "$3" ]; then json_str "$3"; else printf null; fi)" "$eta" \
+		"$SEL_STARTED_AT" "$(hosts_json)"
+}
+
+select_cleanup()
+{
+	trap - EXIT INT TERM HUP
+	nft_drop_blockcheck_tables
+	rm -rf "$SEL_WORK"
+	if [ "$SEL_PREV" = on ]; then
+		systemctl reset-failed "$YTU_UNIT" 2>/dev/null
+		# --no-block: this may run while our own unit is being stopped (cancel)
+		systemctl start --no-block "$YTU_UNIT" 2>/dev/null
+	fi
+	rm -f "$SEL_STATE"
+}
+
+select_signal()
+{
+	SEL_CANCELLED=1
+	select_finish_cancelled
+	exit 1
+}
+
+select_cancelled() { [ -n "$SEL_CANCELLED" ]; }
+
+# runs blockcheck2 for one domain, streams progress, leaves output in $SEL_WORK/out
+# $1 test (custom|standard) $2 domain $3 list file (custom) $4 progress base $5 progress total $6 scanlevel $7 repeats
+bc_run()
+{
+	local sim=''
+	[ "$YTU_SIMULATE" = 1 ] && sim="SIMULATE=1 SIM_SUCCESS_RATE=${YTU_SIM_RATE:-50}"
+	: >"$SEL_WORK/out"
+	echo "===== $1 $2 $(date)" >>"$SEL_LOG"
+	# shellcheck disable=SC2086
+	# shims (nslookup, hexdump, which) go last in PATH: they only fill in missing tools.
+	# blockcheck2 writes fixed /tmp names as root (/tmp/dig1.txt, zapret-hdr-*): the select
+	# unit has PrivateTmp=yes, and HTTP/DNS checks that use them are off anyway.
+	(cd "$YTU_Z2" && env PATH="$PATH:$YTU_ROOT/libexec/shim" $sim BATCH=1 TEST="$1" DOMAINS="$2" IPVS="$SEL_IPVS" \
+		ENABLE_HTTP=0 ENABLE_HTTP3=0 ENABLE_HTTPS_TLS12=0 ENABLE_HTTPS_TLS13=1 \
+		SKIP_DNSCHECK=1 SKIP_IPBLOCK=1 CURL_MAX_TIME=$SELECT_CURL_MAX_TIME \
+		MAX_TTL=0 MAX_AUTOTTL_DELTA=0 REPEATS="$7" PARALLEL=0 SCANLEVEL="$6" LIST_HTTPS_TLS13="${3:-/dev/null}" \
+		sh ./blockcheck2.sh </dev/null 2>&1) |
+	tee -a "$SEL_LOG" | {
+		n=$4
+		while IFS= read -r line; do
+			case "$line" in
+				"- curl_test_https_tls13 ipv"[46]" "*)
+					n=$((n + 1))
+					cur=$(printf '%s\n' "$line" | sed -n 's/.*--comment=\([^ ]*\).*/\1/p')
+					[ -n "$cur" ] || cur=$(printf '%s\n' "$line" | sed 's/^.* : nfqws2 //' | cut -c 1-120)
+					t=$5
+					[ "$t" -gt "$n" ] || t=$((n + 1))
+					emit_progress "$n" "$t" "$2: $cur"
+					;;
+			esac
+			printf '%s\n' "$line" >>"$SEL_WORK/out"
+		done
+		echo "$n" >"$SEL_WORK/done"
+	}
+	SEL_DONE=$(cat "$SEL_WORK/done" 2>/dev/null || echo "$4")
+	grep -q '^\* SUMMARY' "$SEL_WORK/out"
+}
+
+# SUMMARY lines for domain $1: nfqws2 args of strategies that worked on every tested IP version
+# (IPVS=46 gives separate "ipv4"/"ipv6" lines per strategy)
+bc_working()
+{
+	sed -n '/^\* SUMMARY/,$p' "$SEL_WORK/out" | awk -v d="$1" -v need="$SEL_NV" '
+		$1 == "curl_test_https_tls13" && $2 ~ /^ipv[46]$/ && $3 == d && $4 == ":" && $5 == "nfqws2" && $6 ~ /^--/ {
+			s = $6; for (i = 7; i <= NF; i++) s = s " " $i
+			if (!((s, $2) in seen)) { seen[s, $2] = 1; cnt[s]++ }
+			if (!(s in order)) { order[s] = ++n; list[n] = s }
+		}
+		END { for (i = 1; i <= n; i++) if (cnt[list[i]] >= need) print list[i] }'
+}
+
+comment_id() { printf '%s\n' "$1" | sed -n 's/^.*--comment=\([^ ]*\).*$/\1/p'; }
+
+bc_fail_reason()
+{
+	tail -n 5 "$SEL_WORK/out" | tr '\n' ' '
+}
+
+select_result()
+{
+	printf '%s\n' "$1"
+	printf '%s\n' "$1" >"$SEL_LAST"
+}
+
+select_finish_found()
+{
+	# $1 strategy id
+	write_strategy "$SEL_NETWORK" "$1"
+	set_network "$SEL_NETWORK"
+	ytu_log "select $SEL_MODE found $1 network=$SEL_NETWORK"
+	select_result "$(printf '{"event":"done","mode":"%s","found":true,"strategyId":%s}' "$SEL_MODE" "$(json_str "$1")")"
+}
+
+select_finish_none()
+{
+	# $1 reason
+	ytu_log "select $SEL_MODE not found: $1"
+	select_result "$(printf '{"event":"done","mode":"%s","found":false,"reason":%s}' "$SEL_MODE" "$(json_str "$1")")"
+}
+
+select_finish_cancelled()
+{
+	ytu_log "select $SEL_MODE cancelled"
+	select_result "$(printf '{"event":"done","mode":"%s","found":false,"cancelled":true}' "$SEL_MODE")"
+}
+
+select_die()
+{
+	ytu_log "select $SEL_MODE failed: $1"
+	select_result "$(printf '{"error":"HELPER_FAILED","message":%s}' "$(json_str "$1")")"
+	exit 1
+}
+
+# $1 - candidate list file (blockcheck2 custom format, one --comment=ID line each)
+# $2 - domains; keeps in the file only strategies that pass every domain
+verify_candidates()
+{
+	local dom cnt left ids id
+	left=$(echo "$2" | wc -w)
+	for dom in $2; do
+		cnt=$(grep -c '^--comment=' "$1")
+		[ "$cnt" -gt 0 ] || return 1
+		bc_run custom "$dom" "$1" "$SEL_DONE" "$((SEL_DONE + cnt * left * SEL_NV))" force 1 || {
+			select_cancelled && return 2
+			SEL_ERROR="blockcheck2 failed: $(bc_fail_reason)"
+			return 3
+		}
+		select_cancelled && return 2
+		ids=$(bc_working "$dom" | while IFS= read -r a; do comment_id "$a"; done)
+		: >"$1.next"
+		for id in $ids; do
+			grep -m 1 -F -- "--comment=$id " "$1" >>"$1.next"
+		done
+		mv -f "$1.next" "$1"
+		SEL_PASSED="$SEL_PASSED $dom"
+		left=$((left - 1))
+	done
+	[ -s "$1" ]
+}
+
+# first check host that fails without bypass; empty if nothing is blocked
+first_blocked_host()
+{
+	local d v
+	if [ "$YTU_SIMULATE" = 1 ]; then
+		echo "${YTU_CHECK_HOSTS%% *}"
+		return
+	fi
+	for d in $YTU_CHECK_HOSTS; do
+		for v in $SEL_IPVS_LIST; do
+			curl -"$v" -sS -I --tlsv1.3 --max-time 5 -o /dev/null "https://$d" >/dev/null 2>&1 || { echo "$d"; return; }
+		done
+	done
+}
+
+select_quick()
+{
+	local list="$SEL_WORK/cand.txt" r
+	# SCANLEVEL=force would let every candidate "pass" on an unblocked network
+	[ -n "$(first_blocked_host)" ] || { select_finish_none "not blocked"; return; }
+	grep '^--comment=' "$YTU_LIST13" >"$list"
+	verify_candidates "$list" "$YTU_CHECK_HOSTS"
+	r=$?
+	case $r in
+		0) select_finish_found "$(comment_id "$(head -n 1 "$list")")" ;;
+		1) select_finish_none "no strategy passed all hosts" ;;
+		2) ;;
+		*) select_die "$SEL_ERROR" ;;
+	esac
+}
+
+shell_quote_words()
+{
+	local w
+	for w in $1; do
+		printf " '%s'" "$(printf '%s' "$w" | sed "s/'/'\\\\''/g")"
+	done
+}
+
+select_deep()
+{
+	local scan d rest='' list="$SEL_WORK/cand.txt" id r n=0 a est
+	scan=$(first_blocked_host)
+	[ -n "$scan" ] || { select_finish_none "not blocked"; return; }
+	for d in $YTU_CHECK_HOSTS; do
+		[ "$d" = "$scan" ] || rest="$rest $d"
+	done
+
+	est=$DEEP_EST_TESTS
+	[ "$SEL_NV" = 2 ] && est=$DEEP_EST_TESTS46
+	bc_run standard "$scan" "" 0 "$est" quick 1 || {
+		select_cancelled && return
+		select_die "blockcheck2 failed: $(bc_fail_reason)"
+	}
+	select_cancelled && return
+
+	: >"$list"
+	bc_working "$scan" | awk '!seen[$0]++' >"$SEL_WORK/found.txt"
+	while IFS= read -r a && [ $n -lt $DEEP_MAX_CANDIDATES ]; do
+		printf '%s\n' "$a" | tr ' ' '\n' | args_safe || continue
+		id="bc2-$(printf '%s' "$a" | cksum | cut -d' ' -f1)"
+		set -f
+		printf '%s%s\n' "--comment=$id" "$(shell_quote_words "$a")" >>"$list"
+		set +f
+		printf '%s\n' "--comment=$id $a" >"$SEL_WORK/$id.args"
+		n=$((n + 1))
+	done <"$SEL_WORK/found.txt"
+	[ $n -gt 0 ] || { select_finish_none "no working strategy for $scan"; return; }
+	SEL_PASSED=$scan
+
+	verify_candidates "$list" "$rest"
+	r=$?
+	case $r in
+		0)
+			id=$(comment_id "$(head -n 1 "$list")")
+			mkdir -p "$YTU_STATE/custom"
+			cp "$SEL_WORK/$id.args" "$YTU_STATE/custom/$id.args"
+			chmod 0644 "$YTU_STATE/custom/$id.args"
+			select_finish_found "$id"
+			;;
+		1) select_finish_none "no strategy passed all hosts" ;;
+		2) ;;
+		*) select_die "$SEL_ERROR" ;;
+	esac
+}
+
+# body of the transient unit ytunblock-select; stdout is the progress file
+cmd_select_run()
+{
+	SEL_MODE=$1
+	shift
+	need_root
+	parse_network_opt "$@"
+	SEL_NETWORK=$NETWORK
+	exec >>"$SEL_JSONL"
+
+	SEL_WORK="$YTU_RUN/select"
+	rm -rf "$SEL_WORK"
+	mkdir -p "$SEL_WORK" "$YTU_LOGDIR"
+	SEL_LOG="$YTU_LOGDIR/select-$SEL_MODE.log"
+	: >"$SEL_LOG"
+	chmod 0644 "$SEL_LOG"
+	SEL_START=$(date +%s)
+	SEL_STARTED_AT=$(now_iso)
+	SEL_PASSED=
+	SEL_DONE=0
+	# D7: with an IPv6 default route the browser prefers v6, so a strategy must pass both.
+	# YTU_IPVS is a test hook (reaches the unit only via --setenv in SIMULATE mode)
+	SEL_IPVS=${YTU_IPVS:-}
+	if [ -z "$SEL_IPVS" ]; then
+		SEL_IPVS=4
+		ip -6 route show default 2>/dev/null | grep -q '^default' && SEL_IPVS=46
+	fi
+	case "$SEL_IPVS" in
+		46) SEL_NV=2; SEL_IPVS_LIST="4 6" ;;
+		*) SEL_IPVS=4; SEL_NV=1; SEL_IPVS_LIST=4 ;;
+	esac
+	SEL_PREV=off
+	systemctl is-active --quiet "$YTU_UNIT" && SEL_PREV=on
+	printf 'prev=%s\nmode=%s\nnetwork=%s\nstartedAt=%s\n' "$SEL_PREV" "$SEL_MODE" "$SEL_NETWORK" "$SEL_STARTED_AT" >"$SEL_STATE"
+	trap select_cleanup EXIT
+	trap select_signal INT TERM HUP
+	ytu_log "select $SEL_MODE start network=$SEL_NETWORK prev=$SEL_PREV ipvs=$SEL_IPVS"
+	# blockcheck2 only warns about a running nfqws2, but its results would be garbage
+	[ "$SEL_PREV" = on ] && systemctl stop "$YTU_UNIT"
+	nft_drop_blockcheck_tables
+
+	emit_progress 0 1 ""
+	if [ "$SEL_MODE" = quick ]; then
+		select_quick
+	else
+		select_deep
+	fi
+}
+
+cmd_select()
+{
+	local mode=$1 m env=''
+	case "$mode" in
+		quick|deep) ;;
+		*) die HELPER_FAILED "usage: select quick|deep [--network ID]" ;;
+	esac
+	shift
+	need_root
+	need_installed
+	parse_network_opt "$@"
+	lock_or_busy
+	recover_stale
+	m=$(requirements_hard_missing)
+	[ -z "$m" ] || die MISSING_REQUIREMENTS "missing: $m"
+
+	: >"$SEL_JSONL"
+	chmod 0644 "$SEL_JSONL"
+	rm -f "$SEL_LAST"
+	# test hooks; pkexec clears the environment, so an unprivileged caller cannot set them
+	[ "$YTU_SIMULATE" = 1 ] && env="--setenv=YTU_SIMULATE=1 --setenv=YTU_SIM_RATE=${YTU_SIM_RATE:-50} --setenv=YTU_IPVS=${YTU_IPVS:-}"
+	systemctl reset-failed "$YTU_SELECT_UNIT" 2>/dev/null
+	# shellcheck disable=SC2086
+	systemd-run --unit="$YTU_SELECT_UNIT" --collect --quiet -p PrivateTmp=yes $env \
+		--description="YouTube Unblock strategy selection" \
+		"$YTU_HELPER" _select-run "$mode" ${NETWORK:+--network "$NETWORK"} >/dev/null 2>&1 ||
+		die HELPER_FAILED "systemd-run failed"
+	exec 8>&-
+	cmd_select_follow strict
+}
+
+# progress so far, then new lines until the result; a finished selection gives only its result.
+# $1 = strict (from `select`): a unit that died without a result is an error, not "none"
+cmd_select_follow()
+{
+	local n=0 total running out
+	out=$(grep -E '"event":"done"|^\{"error":' "$SEL_JSONL" 2>/dev/null | tail -n 1)
+	if [ -n "$out" ]; then
+		printf '%s\n' "$out"
+		case "$out" in '{"error":'*) return 1 ;; esac
+		return 0
+	fi
+	if ! selecting && [ ! -s "$SEL_JSONL" ] && [ "$1" != strict ]; then
+		if [ -s "$SEL_LAST" ]; then cat "$SEL_LAST"; else echo '{"event":"none"}'; fi
+		return 0
+	fi
+	while :; do
+		running=0
+		selecting && running=1
+		total=$(wc -l <"$SEL_JSONL" 2>/dev/null || echo 0)
+		if [ "$total" -gt "$n" ]; then
+			out=$(sed -n "$((n + 1)),${total}p" "$SEL_JSONL")
+			printf '%s\n' "$out"
+			n=$total
+			case "$out" in
+				*'"event":"done"'*) return 0 ;;
+				*'{"error":'*) return 1 ;;
+			esac
+		fi
+		if [ $running = 0 ]; then
+			[ -s "$SEL_LAST" ] && { cat "$SEL_LAST"; return 0; }
+			[ "$1" = strict ] && [ "$n" = 0 ] &&
+				die HELPER_FAILED "selection unit exited: $(journalctl -u "$YTU_SELECT_UNIT" -n 3 --no-pager -o cat 2>/dev/null | tr '\n' ' ')"
+			echo '{"event":"done","found":false,"reason":"interrupted"}'
+			return 0
+		fi
+		sleep 0.5
+	done
+}
+
+cmd=$1
+[ $# -gt 0 ] && shift
+case "$cmd" in
+	status) cmd_status ;;
+	start) cmd_start ;;
+	stop) cmd_stop ;;
+	apply) cmd_apply "$@" ;;
+	select) cmd_select "$@" ;;
+	select-follow) cmd_select_follow "$@" ;;
+	cancel) cmd_cancel ;;
+	set-quic) cmd_set_quic "$@" ;;
+	_*)
+		# unit hooks: only from systemd (pkexec sets PKEXEC_UID, systemd sets INVOCATION_ID)
+		{ [ -z "$PKEXEC_UID" ] && [ -n "$INVOCATION_ID" ]; } || die HELPER_FAILED "internal command"
+		case "$cmd" in
+			_select-run) cmd_select_run "$@" ;;
+			_pre-start) cmd_pre_start ;;
+			_run) cmd_run ;;
+			_post-stop) cmd_post_stop ;;
+			*) die HELPER_FAILED "unknown command" ;;
+		esac
+		;;
+	*) die HELPER_FAILED "unknown command" ;;
+esac
