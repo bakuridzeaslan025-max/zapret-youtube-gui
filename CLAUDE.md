@@ -97,8 +97,10 @@ Hostlist (ЧТО десинкать) — от сервиса, общий. Стр
 `tests/dpi-stand/`, `tests/strategies/` (полностью), `system/` + `real.js` (раунды 1–2; без ревью —
 фиксы раунда 3 и IPv6/D7). Workflow и `app/package.json` от CI-агента — без ревью.
 
-**GitHub/CI:** репо `bakuridzeaslan025-max/zapret-youtube-gui` (remote `origin`), пушим ветку `main`
-без тегов (кроме явных `v*` для релизов).
+**GitHub/CI:** репо `bakuridzeaslan025-max/zapret-youtube-gui` (remote `origin`, HTTPS через `gh`
+credential helper — локальный конфиг репо; ssh-ключ мака от другого аккаунта), пушим `main` без
+тегов, релиз — явный `git push origin vX.Y.Z` → публичный релиз сразу. Выпущен `v0.1.0` (28.09.2026).
+README.md — для неподготовленного пользователя (скриншоты из `docs/screenshots`, ссылки на latest).
 
 1. Кодинговый сабагент заканчивает кусок работы → оркестратор запускает сабагента-ревьюера
    (модель fable, только чтение) на изменённый код этого куска.

@@ -5,9 +5,9 @@
 | 1 | Unit: парсер SUMMARY/COVERAGE blockcheck2, JSON-lines helper'а, вердикты `checkNow` на фейковых таймингах, определение сети по фикстурам `nmcli`/`ip route` | `tests/unit/` | `node:test`, мак/Linux | после `app/` + `system/` |
 | 2 | Контрактные: один набор тестов против `mock.js` и `real.js` (real — с фейковыми `pkexec`/helper через env) → mock не расходится с реальностью | `tests/contract/` | `node:test` | после `app/` + `system/` |
 | 3 | Стратегии: консистентность json ↔ списки blockcheck2, наличие блобов, `nfqws2 --dry-run` и `--intercept=0` на каждую | `tests/strategies/` | docker linux/amd64 | готово: `tests/strategies/run.sh` |
-| 4 | Системные: shellcheck; install/uninstall (идемпотентность, ничего не остаётся), start/stop/apply, select в SIMULATE | `tests/system/` | docker Ubuntu 24.04, Fedora, `--privileged` | после `system/` |
+| 4 | Системные: shellcheck; install/uninstall (идемпотентность, ничего не остаётся), start/stop/apply, select в SIMULATE | `tests/system/` | docker Ubuntu 24.04, Fedora (amd64+arm64), privileged systemd | готово: `system/test/run-tests.sh` — только в CI (`heavy`), на маке ломает binfmt Docker Desktop; без privileged — `unit-tests.sh`, `simulate-tests.sh`, `bootstrap-test.js` |
 | 5 | Стенд с фейковым DPI: client → isp (DPI) → server, полный путь: вердикт `dpi`/`path`, быстрый подбор находит стратегию, после применения все хосты открываются | `tests/dpi-stand/` | docker compose, `cap_add NET_ADMIN,NET_RAW` | готово: `tests/dpi-stand/run.sh all` (~9 мин) |
-| 6 | E2E UI: Playwright + Electron в mock-режиме, сценарии `YTU_MOCK_SCENARIO`, скриншоты | `tests/e2e/` | мак (без пиксельного сравнения) / Linux-контейнер с xvfb (эталоны) | после `app/` |
+| 6 | E2E UI: Playwright + Electron в mock-режиме, сценарии `YTU_MOCK_SCENARIO`, скриншоты | `tests/e2e/` | мак (без пиксельного сравнения) / Linux-контейнер с xvfb (эталоны) | частично: скриншоты всех экранов в CI (`ci` → артефакт `screenshots-linux`); сценарных e2e нет |
 | 7 | Ручная проверка на живом провайдере (город и 4G) | `docs/manual-testing.md` | реальное железо | готово: чек-лист |
 
 ## Принципы
@@ -24,3 +24,12 @@
   Коды выхода проверять без пайпов (`| tail` маскирует rc). Аргументы lua-функций nfqws2 не валидирует (опечатка
   `tcp_tss=5` проходит `--intercept=0`) — ловит только живой прогон.
 - Каждый уровень запускается одной командой с кодом выхода ≠ 0 при падении.
+
+## CI (GitHub Actions)
+
+- `ci` — каждый push/PR: lint (shellcheck, node --check, json/py), `tests/strategies`, скриншоты UI
+  под xvfb, сборка AppImage x64.
+- `heavy` — push в `main` и перед релизом: `tests/dpi-stand/run.sh all`, `system/test/run-tests.sh
+  full` (Ubuntu/Fedora × amd64/arm64).
+- `release` — тег `v*`: heavy → AppImage x86_64+aarch64 → публичный релиз (+ копии без версии для
+  ссылок `releases/latest/download/…` и `SHA256SUMS`).
