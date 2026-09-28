@@ -1,0 +1,75 @@
+# nfqws2 strategies for blockcheck2 TEST=custom (LIST_HTTPS_TLS13=<this file>)
+# translated once from flowseal 249a704 for zapret2 zapret2-v1.0.5.2; maintained by hand
+# each line is eval'd by blockcheck2 (custom/10-list.sh): $ZAPRET_BASE expands there
+
+# flowseal-general-alt (general (ALT).bat)
+# winws: --ip-id=zero --dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=6:ip_id=zero --lua-desync=fakedsplit:pos=2:pattern=0x00:tcp_ts=-600000:repeats=6:ip_id=zero
+
+# flowseal-general-alt10 (general (ALT10).bat, general (SIMPLE FAKE ALT2).bat)
+# winws: --ip-id=zero --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt10 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=6:ip_id=zero
+
+# flowseal-general-alt11 (general (ALT11).bat)
+# winws: --ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt11 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=8:ip_id=zero --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero
+
+# flowseal-general-alt12 (general (ALT12).bat, general (EXP).bat, general (SIMPLE FAKE).bat)
+# winws: --ip-id=zero --dpi-desync=hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com
+--comment=flowseal-general-alt12 --payload=tls_client_hello --lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000:ip_id=zero
+
+# flowseal-general-alt13 (general (ALT13).bat)
+# winws: --dpi-desync=hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com
+--comment=flowseal-general-alt13 --payload=tls_client_hello --lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000
+
+# flowseal-general-alt2 (general (ALT2).bat)
+# winws: --ip-id=zero --dpi-desync=multisplit --dpi-desync-split-seqovl=652 --dpi-desync-split-pos=2 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt2 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=multisplit:pos=2:seqovl=652:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero
+
+# flowseal-general-alt3 (general (ALT3).bat) APPROX
+# winws: --ip-id=zero --dpi-desync=fake,hostfakesplit --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-hostfakesplit-mod=host=www.google.com,altorder=1 --dpi-desync-fooling=ts
+--comment=flowseal-general-alt3 --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_ts=-600000:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=hostfakesplit:host=www.google.com:nofake2:tcp_ts=-600000:ip_id=zero
+
+# flowseal-general-alt4 (general (ALT4).bat)
+# winws: --ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=1000 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt4 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero --lua-desync=multisplit:pos=2:ip_id=zero
+
+# flowseal-general-alt5 (general (ALT5).bat)
+# winws: --dpi-desync=syndata,multidisorder
+--comment=flowseal-general-alt5 --lua-desync=syndata --payload=tls_client_hello --lua-desync=multidisorder:pos=2
+
+# flowseal-general-alt6 (general (ALT6).bat, general.bat)
+# winws: --ip-id=zero --dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt6 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero
+
+# flowseal-general-alt7 (general (ALT7).bat)
+# winws: --ip-id=zero --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1 --dpi-desync-split-seqovl=679 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-alt7 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=multisplit:pos=2,sniext+1:seqovl=679:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero
+
+# flowseal-general-alt8 (general (ALT8).bat)
+# winws: --ip-id=zero --dpi-desync=fake --dpi-desync-fake-tls-mod=none --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2
+--comment=flowseal-general-alt8 --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero
+
+# flowseal-general-alt9 (general (ALT9).bat)
+# winws: --ip-id=zero --dpi-desync=hostfakesplit --dpi-desync-repeats=4 --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com
+--comment=flowseal-general-alt9 --payload=tls_client_hello --lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000:repeats=4:ip_id=zero
+
+# flowseal-general-fake-tls-auto-alt (general (FAKE TLS AUTO ALT).bat)
+# winws: --ip-id=zero --dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-repeats=8 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
+--comment=flowseal-general-fake-tls-auto-alt --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=fakedsplit:pos=1:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero
+
+# flowseal-general-fake-tls-auto-alt2 (general (FAKE TLS AUTO ALT2).bat)
+# winws: --ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=10000000 --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
+--comment=flowseal-general-fake-tls-auto-alt2 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_seq=10000000:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero
+
+# flowseal-general-fake-tls-auto-alt3 (general (FAKE TLS AUTO ALT3).bat)
+# winws: --ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
+--comment=flowseal-general-fake-tls-auto-alt3 --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_ts=-600000:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero
+
+# flowseal-general-fake-tls-auto (general (FAKE TLS AUTO).bat)
+# winws: --ip-id=zero --dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-repeats=11 --dpi-desync-fooling=badseq --dpi-desync-fake-tls=0x00000000 --dpi-desync-fake-tls=! --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com
+--comment=flowseal-general-fake-tls-auto --payload=tls_client_hello --lua-desync=fake:blob=0x00000000:tcp_seq=-10000:tcp_ack=-66000:tcp_ts_up:repeats=11:ip_id=zero --lua-desync=fake:blob=fake_default_tls:tcp_seq=-10000:tcp_ack=-66000:tcp_ts_up:repeats=11:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=multidisorder:pos=1,midsld:ip_id=zero
+
+# flowseal-general-simple-fake-alt (general (SIMPLE FAKE ALT).bat)
+# winws: --ip-id=zero --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin
+--comment=flowseal-general-simple-fake-alt --blob=tls_clienthello_www_google_com:@"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero

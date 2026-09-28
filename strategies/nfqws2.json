@@ -1,0 +1,373 @@
+{
+  "source": {
+    "flowseal": {
+      "repo": "https://github.com/flowseal/zapret-discord-youtube",
+      "commit": "249a70424aae2676f99c5363e21073ed89873eda"
+    },
+    "zapret2_release": "zapret2-v1.0.5.2",
+    "translated": "2026-09-28",
+    "note": "переведено разово translate_nfqws2.py, дальше поддерживается вручную",
+    "placeholders": {
+      "{FAKE}": "<zapret2>/files/fake"
+    }
+  },
+  "strategies": [
+    {
+      "id": "flowseal-general-alt",
+      "sources": [
+        "general (ALT).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=6:ip_id=zero",
+        "--lua-desync=fakedsplit:pos=2:pattern=0x00:tcp_ts=-600000:repeats=6:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=6:ip_id=zero --lua-desync=fakedsplit:pos=2:pattern=0x00:tcp_ts=-600000:repeats=6:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt10",
+      "sources": [
+        "general (ALT10).bat",
+        "general (SIMPLE FAKE ALT2).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=6:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt10 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=6:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt11",
+      "sources": [
+        "general (ALT11).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=8:ip_id=zero",
+        "--lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt11 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_ts=-600000:repeats=8:ip_id=zero --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt12",
+      "sources": [
+        "general (ALT12).bat",
+        "general (EXP).bat",
+        "general (SIMPLE FAKE).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt12 --payload=tls_client_hello --lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt13",
+      "sources": [
+        "general (ALT13).bat"
+      ],
+      "winws": "--dpi-desync=hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt13 --payload=tls_client_hello --lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt2",
+      "sources": [
+        "general (ALT2).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=multisplit --dpi-desync-split-seqovl=652 --dpi-desync-split-pos=2 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=multisplit:pos=2:seqovl=652:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt2 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=multisplit:pos=2:seqovl=652:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt3",
+      "sources": [
+        "general (ALT3).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,hostfakesplit --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-hostfakesplit-mod=host=www.google.com,altorder=1 --dpi-desync-fooling=ts",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=fake_default_tls:tcp_ts=-600000:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com",
+        "--lua-desync=hostfakesplit:host=www.google.com:nofake2:tcp_ts=-600000:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt3 --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_ts=-600000:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=hostfakesplit:host=www.google.com:nofake2:tcp_ts=-600000:ip_id=zero",
+      "exact": false,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
+        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
+        "hostfakesplit altorder=1 не выражается: nfqws1 шлёт before,fake,after,real (без fake2); nfqws2 с nofake2 — before,fake,real,after (desync.c:2175 vs zapret-antidpi.lua:698-707)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt4",
+      "sources": [
+        "general (ALT4).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=1000 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero",
+        "--lua-desync=multisplit:pos=2:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt4 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_seq=1000:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero --lua-desync=multisplit:pos=2:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt5",
+      "sources": [
+        "general (ALT5).bat"
+      ],
+      "winws": "--dpi-desync=syndata,multidisorder",
+      "nfqws2": [
+        "--lua-desync=syndata",
+        "--payload=tls_client_hello",
+        "--lua-desync=multidisorder:pos=2"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt5 --lua-desync=syndata --payload=tls_client_hello --lua-desync=multidisorder:pos=2",
+      "exact": true,
+      "risks": [
+        "syndata работает на SYN: в очередь должен попадать исходящий SYN; hostname на SYN неизвестен — профиль с hostlist его не поймает",
+        "multidisorder в nfqws2 режет reasm целиком; для многопакетного ClientHello (kyber) порядок сегментов иной, чем в nfqws1. Точный аналог — multidisorder_legacy (manual.md:4293-4295)"
+      ],
+      "notes": [
+        "no hostlist/ipset: profile applies to ALL traffic on its ports",
+        "port filter also includes Discord ports",
+        "desync=syndata acts on the SYN: nft/iptables rules must queue the outgoing SYN too"
+      ]
+    },
+    {
+      "id": "flowseal-general-alt6",
+      "sources": [
+        "general (ALT6).bat",
+        "general.bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt6 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt7",
+      "sources": [
+        "general (ALT7).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1 --dpi-desync-split-seqovl=679 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=multisplit:pos=2,sniext+1:seqovl=679:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt7 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=multisplit:pos=2,sniext+1:seqovl=679:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt8",
+      "sources": [
+        "general (ALT8).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake --dpi-desync-fake-tls-mod=none --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=fake_default_tls:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt8 --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
+        "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-alt9",
+      "sources": [
+        "general (ALT9).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=hostfakesplit --dpi-desync-repeats=4 --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=www.google.com",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000:repeats=4:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-alt9 --payload=tls_client_hello --lua-desync=hostfakesplit:host=www.google.com:tcp_ts=-600000:repeats=4:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-fake-tls-auto-alt",
+      "sources": [
+        "general (FAKE TLS AUTO ALT).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-repeats=8 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=fake_default_tls:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com",
+        "--lua-desync=fakedsplit:pos=1:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-fake-tls-auto-alt --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=fakedsplit:pos=1:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
+        "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
+        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-fake-tls-auto-alt2",
+      "sources": [
+        "general (FAKE TLS AUTO ALT2).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=10000000 --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=fake_default_tls:tcp_seq=10000000:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com",
+        "--lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-fake-tls-auto-alt2 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_seq=10000000:tcp_ack=-66000:tcp_ts_up:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
+        "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
+        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-fake-tls-auto-alt3",
+      "sources": [
+        "general (FAKE TLS AUTO ALT3).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={BIN}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=fake_default_tls:tcp_ts=-600000:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com",
+        "--lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-fake-tls-auto-alt3 --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=fake_default_tls:tcp_ts=-600000:repeats=8:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=multisplit:pos=1:seqovl=681:seqovl_pattern=tls_clienthello_www_google_com:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
+        "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
+        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
+        "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-fake-tls-auto",
+      "sources": [
+        "general (FAKE TLS AUTO).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-repeats=11 --dpi-desync-fooling=badseq --dpi-desync-fake-tls=0x00000000 --dpi-desync-fake-tls=! --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com",
+      "nfqws2": [
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=0x00000000:tcp_seq=-10000:tcp_ack=-66000:tcp_ts_up:repeats=11:ip_id=zero",
+        "--lua-desync=fake:blob=fake_default_tls:tcp_seq=-10000:tcp_ack=-66000:tcp_ts_up:repeats=11:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com",
+        "--lua-desync=multidisorder:pos=1,midsld:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-fake-tls-auto --payload=tls_client_hello --lua-desync=fake:blob=0x00000000:tcp_seq=-10000:tcp_ack=-66000:tcp_ts_up:repeats=11:ip_id=zero --lua-desync=fake:blob=fake_default_tls:tcp_seq=-10000:tcp_ack=-66000:tcp_ts_up:repeats=11:ip_id=zero:tls_mod=rnd,dupsid,sni=www.google.com --lua-desync=multidisorder:pos=1,midsld:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
+        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
+        "multidisorder в nfqws2 режет reasm целиком; для многопакетного ClientHello (kyber) порядок сегментов иной, чем в nfqws1. Точный аналог — multidisorder_legacy (manual.md:4293-4295)"
+      ],
+      "notes": []
+    },
+    {
+      "id": "flowseal-general-simple-fake-alt",
+      "sources": [
+        "general (SIMPLE FAKE ALT).bat"
+      ],
+      "winws": "--ip-id=zero --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-fake-tls={BIN}/tls_clienthello_www_google_com.bin",
+      "nfqws2": [
+        "--blob=tls_clienthello_www_google_com:@{FAKE}/tls_clienthello_www_google_com.bin",
+        "--payload=tls_client_hello",
+        "--lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero"
+      ],
+      "blockcheck2": "--comment=flowseal-general-simple-fake-alt --blob=tls_clienthello_www_google_com:@\"$ZAPRET_BASE/files/fake/tls_clienthello_www_google_com.bin\" --payload=tls_client_hello --lua-desync=fake:blob=tls_clienthello_www_google_com:tcp_seq=2:tcp_ack=-66000:tcp_ts_up:repeats=6:ip_id=zero",
+      "exact": true,
+      "risks": [
+        "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)"
+      ],
+      "notes": []
+    }
+  ]
+}
