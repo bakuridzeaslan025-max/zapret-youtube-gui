@@ -121,3 +121,5 @@ tcp_timestamps:
   `dpi`. Быстрый подбор 77 с → `own-wssize-multidisorder`. Видео 1080p ок. `own-multidisorder-hostmid`
   (без wssize) — субъективно так же, handshake 25–33 мс → **wssize не нужен** на этом провайдере.
   Вкл/выкл ок. Удаление чистое (файлы, юниты, polkit, nft `inet ytunblock`). Баги B1–B3.
+  Автозапуск: перезагрузка с выключенным Wi-Fi → после включения Wi-Fi YouTube работает сам,
+  GUI не нужен (systemd-сервис). Сон/пробуждение — ок.
