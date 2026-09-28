@@ -71,7 +71,9 @@ Hostlist (ЧТО десинкать) — от сервиса, общий. Стр
 
 ## Структура
 
-- `docs/` — исследования и решения; `docs/ipc-api.md` — контракт renderer↔main↔helper.
+- `docs/` — исследования и решения; `docs/ipc-api.md` — контракт renderer↔main↔helper;
+  `docs/testing.md` — уровни тестов и где они живут.
+- `tests/` — `unit/`, `contract/`, `strategies/`, `system/`, `dpi-stand/` (docker compose с фейковым DPI), `e2e/`.
 - `app/` — Electron: `main/` (main, preload, ipc, `services/mock.js` | `services/real.js`), `renderer/`.
 - `system/` — то, что ставится от root: install/uninstall, `ytu-helper`, systemd, nft, polkit, AppArmor.
 - `strategies/` — стратегии: `nfqws2.json` + `blockcheck2/list_https_tls1{2,3}.txt` (источник
