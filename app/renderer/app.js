@@ -1,6 +1,6 @@
 import T from './i18n/ru.js';
 
-const HELP_URL = 'https://github.com/ytunblock/ytunblock#readme';
+const HELP_URL = 'https://github.com/bakuridzeaslan025-max/zapret-youtube-gui#readme';
 const HOST_KEYS = ['site', 'api', 'thumbs', 'video'];
 // order the helper checks hosts in; the quick-select list follows hosts[] when present
 const CHECK_ORDER = ['api', 'site', 'video', 'thumbs'];
@@ -333,7 +333,7 @@ const screens = {
     const netIcon = NET_ICONS[net ? net.kind : 'other'] || NET_ICONS.other;
     const protection = selecting
       ? `<div class="card-row dim"><span class="stack tight"><span class="t strong">${esc(T.protection)}</span><span class="s">${esc(T.protectionPaused)}</span></span>${toggle('toggle', false, { disabled: true })}</div>`
-      : `<div class="card-row"><span class="label strong">${esc(T.protection)}</span>${toggle('toggle', S.busy === 'enable' || (on && S.busy !== 'disable'), { shine: true, disabled: !!S.busy })}</div>`;
+      : `<div class="card-row"><span class="label strong">${esc(T.protection)}</span>${toggle('toggle', S.busy === 'enable' || (on && S.busy !== 'disable'), { shine: true, disabled: !!S.busy || offline })}</div>`;
     const banner = noStrategy && net && !selecting && !offline
       ? `<div class="banner">${icon(netIcon)}<span class="stack"><span class="t">${esc(T.newNetTitle)}</span><span class="s">${esc(T.newNetSub(net.label))}</span></span>${btn('select-quick', T.selectShort, 'btn-primary')}</div>`
       : '';
@@ -488,7 +488,10 @@ async function doInstall() {
   }
   S.state = await window.api.getState();
   // strategies restored from the settings copy (reinstall): straight to the main screen, no reselection
-  runCheck(S.state.strategy ? 'main' : 'onboarding');
+  if (!S.state.strategy) return runCheck('onboarding');
+  // service did not come up (e.g. FIREWALL_CONFLICT): the strategy is there, no reselection
+  if (S.state.service === 'off') return go('main');
+  runCheck('main');
 }
 
 async function runCheck(origin) {

@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   lint:
+    # same-repo PRs are already covered by the push run
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -45,6 +47,7 @@ jobs:
         run: docker compose -f tests/dpi-stand/compose.yaml config -q
 
   strategies:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -58,7 +61,33 @@ jobs:
         env:
           ZAPRET2_TARBALL: ${{ runner.temp }}/zapret2.tar.gz
 
+  system-unit:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: fetch zapret2 -> system/vendor
+        run: |
+          v=$(sed -n 's/^VERSION=//p' system/fetch-zapret2.sh)
+          curl -fsSL --retry 5 --retry-all-errors -o "$RUNNER_TEMP/zapret2.tar.gz" \
+            "https://github.com/bol-van/zapret2/releases/download/$v/zapret2-$v.tar.gz"
+          sh system/fetch-zapret2.sh "$RUNNER_TEMP/zapret2.tar.gz"
+      # non-privileged: nft/systemctl are stubbed by the tests themselves
+      - name: unit, simulate, bootstrap (ubuntu:24.04, no privileges)
+        run: |
+          docker run --rm -v "$PWD:/src:ro" ubuntu:24.04 sh -c '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -q >/dev/null && apt-get install -y -q --no-install-recommends \
+              nodejs kmod iproute2 procps ca-certificates curl >/dev/null || exit 2
+            rc=0
+            sh /src/system/test/unit-tests.sh || rc=1
+            sh /src/system/test/simulate-tests.sh || rc=1
+            node /src/system/test/bootstrap-test.js /src || rc=1
+            exit $rc'
+
   screenshots:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -87,6 +116,7 @@ jobs:
           if-no-files-found: warn
 
   appimage:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     uses: ./.github/workflows/appimage.yml
     with:
       retention-days: 3

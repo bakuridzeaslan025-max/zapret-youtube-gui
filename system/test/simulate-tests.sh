@@ -22,11 +22,12 @@ sel() {
 	INVOCATION_ID=t YTU_SIMULATE=1 YTU_SIM_RATE=$3 YTU_IPVS=$2 $H _select-run "$1"
 	cat $J
 }
-t "quick ipvs=4 total 4 hosts x N" '"total":80,' sel quick 4 100
-t "quick ipvs=46 total doubled" '"total":160,' sel quick 46 100
+N=$(grep -c '^--comment=' /src/strategies/blockcheck2/list_https_tls13.txt)
+t "quick ipvs=4 total 4 hosts x N" "\"total\":$((4 * N))," sel quick 4 100
+t "quick ipvs=46 total doubled" "\"total\":$((8 * N))," sel quick 46 100
 t "quick ipvs=46 found" '"event":"done","mode":"quick","found":true' sel quick 46 100
 t "ipvs=46 SUMMARY has ipv6 lines" 'curl_test_https_tls13 ipv6 youtubei.googleapis.com : nfqws2 --comment=' sh -c 'sed -n "/^\* SUMMARY/,\$p" /var/log/ytunblock/select-quick.log'
-t "ipvs=46 progress counts v6 tests" '"done":160' sh -c "grep -o '\"done\":[0-9]*' $J | tail -n 1"
+t "ipvs=46 progress counts v6 tests" "\"done\":$((8 * N))" sh -c "grep -o '\"done\":[0-9]*' $J | tail -n 1"
 t "hosts[] marks passed domains" '"host":"youtubei.googleapis.com","ok":true' sh -c "grep '\"current\":\"www.youtube.com' $J | tail -n 1"
 t "deep ipvs=46 found" '"found":true,"strategyId":"bc2-' sel deep 46 95
 sel deep 4 0 >/dev/null

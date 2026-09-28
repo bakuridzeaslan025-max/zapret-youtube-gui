@@ -134,7 +134,7 @@ mkdir -p "$NEW/bin" "$NEW/lib" "$NEW/zapret2/nfq2" "$NEW/zapret2/mdig" "$NEW/zap
 	cp "$Z2_SRC/config.default" "$NEW/zapret2/config" &&
 	cp "$STRAT_SRC/nfqws2.json" "$STRAT_SRC/hostlist-youtube.txt" "$NEW/strategies/" &&
 	cp "$STRAT_SRC/blockcheck2/list_https_tls12.txt" "$STRAT_SRC/blockcheck2/list_https_tls13.txt" "$NEW/strategies/blockcheck2/" &&
-	cp "$Z2_SRC/LICENSE.txt" "$NEW/licenses/zapret2-LICENSE.txt" &&
+	cp "$SRC/licenses/zapret2-LICENSE.txt" "$NEW/licenses/" &&
 	cp "$SRC/licenses/flowseal-LICENSE.txt" "$NEW/licenses/"
 } || die HELPER_FAILED "copy failed"
 printf 'zapret2 %s\n' "$(cat "$Z2_SRC/VERSION" 2>/dev/null)" >"$NEW/VERSION"
@@ -180,6 +180,7 @@ install -m 0644 "$SRC/polkit/org.ytunblock.helper.policy" "$YTU_POLICY"
 
 step apparmor
 aa=skipped
+aa_note=
 if apparmor_userns_restricted; then
 	aa=unsupported
 	if have apparmor_parser && [ -f /etc/apparmor.d/abi/4.0 ]; then
@@ -225,5 +226,5 @@ step start
 [ $was_active = 1 ] && systemctl start "$YTU_UNIT"
 
 ytu_log "install $(cat "$YTU_ROOT/VERSION") arch=$ARCH apparmor=$aa"
-printf '{"ok":true,"version":%s,"apparmor":"%s","requirements":%s}\n' \
-	"$(json_str "$(cat "$YTU_ROOT/VERSION")")" "$aa" "$(requirements_json)"
+printf '{"ok":true,"version":%s,"apparmor":"%s","apparmorNote":%s,"requirements":%s}\n' \
+	"$(json_str "$(cat "$YTU_ROOT/VERSION")")" "$aa" "$(json_str "$aa_note")" "$(requirements_json)"

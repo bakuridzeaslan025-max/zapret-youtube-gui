@@ -96,6 +96,8 @@ Hostlist (ЧТО десинкать) — от сервиса, общий. Стр
 `git diff review-paused..HEAD`. Уже отревьюены на момент паузы, но ещё не закоммичены:
 `tests/dpi-stand/`, `tests/strategies/` (полностью), `system/` + `real.js` (раунды 1–2; без ревью —
 фиксы раунда 3 и IPv6/D7). Workflow и `app/package.json` от CI-агента — без ревью.
+**28.09.2026: отложенное ревью `review-paused..` выполнено** (2 раунда + мелочи, всё закрыто). Новые
+коммиты с пометкой «без ревью» после этого — снова кандидаты на ревью.
 
 **GitHub/CI:** репо `bakuridzeaslan025-max/zapret-youtube-gui` (remote `origin`, HTTPS через `gh`
 credential helper — локальный конфиг репо; ssh-ключ мака от другого аккаунта), пушим `main` без

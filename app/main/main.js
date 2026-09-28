@@ -198,6 +198,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('second-instance', showWindow);
   app.on('before-quit', () => { quitting = true; });
+  app.on('will-quit', () => { if (service && typeof service.dispose === 'function') service.dispose(); });
   app.on('window-all-closed', () => app.quit());
 
   app.whenReady().then(async () => {

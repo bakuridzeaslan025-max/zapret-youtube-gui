@@ -118,9 +118,11 @@ function kindByDev(dev) {
 async function detectNetwork() {
   let route;
   try {
-    route = (await execFileP('ip', ['-4', 'route', 'show', 'default'])).split('\n').find((l) => l.startsWith('default'));
-  } catch {
-    return null;
+    const def = async (v) => (await execFileP('ip', [v, 'route', 'show', 'default'])).split('\n').find((l) => l.startsWith('default'));
+    route = (await def('-4')) || (await def('-6'));
+  } catch (e) {
+    // no usable `ip`: networks cannot be told apart, but that is not "offline"
+    return e.code === 'ENOENT' ? { id: 'n-unknown', label: 'Сеть', kind: 'other' } : null;
   }
   if (!route) return null;
   const dev = (/ dev (\S+)/.exec(route) || [])[1];
@@ -194,17 +196,22 @@ async function checkFamily(host, family) {
   return { ok: false, why: i.ok || i.alert ? 'dpi' : 'path' };
 }
 
-// IPv4 always; IPv6 too when there is a v6 default route, since browsers then prefer it
+// IPv4 always; IPv6 too when v6 actually works, since browsers then prefer it.
+// A v6 failure that is not DPI (path) does not fail the host while v4 works: browsers fall back.
 async function checkHost({ key, host }, { v6 = false } = {}) {
   const [a, b] = await Promise.all([checkFamily(host, 4), v6 ? checkFamily(host, 6) : null]);
-  const bad = [a, b].find((r) => r && !r.ok);
+  const bad = [a, b].find((r) => r && !r.ok && !(r === b && a.ok && r.why !== 'dpi'));
   if (bad) return { key, host, ok: false, ms: null, why: bad.why, family: bad === a ? 4 : 6 };
   return { key, host, ok: true, ms: a.ms };
 }
 
-async function hasV6Route() {
+// a v6 default route (RA, VPN) is not v6 connectivity: require a handshake with an unblocked host
+async function hasV6() {
   try {
-    return /^default/m.test(await execFileP('ip', ['-6', 'route', 'show', 'default']));
+    if (!/^default/m.test(await execFileP('ip', ['-6', 'route', 'show', 'default']))) return false;
+    const ip = (await dns.lookup(INNOCENT_SNI, { family: 6 })).address;
+    const p = await probe(ip, INNOCENT_SNI, INNOCENT_TIMEOUT_MS, false);
+    return p.ok || !!p.alert;
   } catch {
     return false;
   }
@@ -409,7 +416,10 @@ class RealService extends EventEmitter {
       this.lastCheck = null;
       this.checkWhileOn = false;
     }
-    if (network && prev && prev.id !== network.id) {
+    const lastId = this.lastNetworkId;
+    if (network) this.lastNetworkId = network.id;
+    // compare with the last known network, not the previous poll: it may have been offline in between
+    if (network && lastId && lastId !== network.id) {
       this.log(`сеть сменилась: ${network.label}`);
       this.lastCheck = null;
       this.checkWhileOn = false;
@@ -437,16 +447,22 @@ class RealService extends EventEmitter {
 
   // react to route changes right away instead of waiting for the 10 s poll (no root needed)
   watchRoutes() {
-    let timer = null;
     try {
-      const mon = spawn('ip', ['monitor', 'route'], { stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, PATH: SYS_PATH } });
+      const mon = this.routeMon = spawn('ip', ['monitor', 'route'], { stdio: ['ignore', 'pipe', 'ignore'], env: { ...process.env, PATH: SYS_PATH } });
       mon.on('error', () => {});
       mon.stdout.on('data', () => {
-        clearTimeout(timer);
-        timer = setTimeout(() => this.refresh().catch(() => {}), 1500);
+        clearTimeout(this.routeTimer);
+        this.routeTimer = setTimeout(() => this.refresh().catch(() => {}), 1500);
       });
       if (mon.unref) mon.unref();
     } catch { /* polling still works */ }
+  }
+
+  dispose() {
+    clearInterval(this.pollTimer);
+    clearTimeout(this.routeTimer);
+    if (this.routeMon) this.routeMon.kill();
+    this.routeMon = null;
   }
 
   buildState() {
@@ -518,6 +534,8 @@ class RealService extends EventEmitter {
       }));
       this.emit('installProgress', { step: 'done', done: 1, total: 1 });
       this.log(`установлено в ${ROOT} (${res.version || ''}, AppArmor: ${res.apparmor || '-'})`);
+      if (res.apparmorNote) this.log(`AppArmor: ${res.apparmorNote}`);
+      this.restoreTried = true;
       this.catalog = null;
       this.syncedNetwork = undefined;
       await this.refreshNow();
@@ -556,7 +574,7 @@ class RealService extends EventEmitter {
   }
 
   async checkNow() {
-    const v6 = await hasV6Route();
+    const v6 = await hasV6();
     const hosts = await Promise.all(HOSTS.map((h) => checkHost(h, { v6 })));
     let verdict = 'unblocked';
     if (hosts.some((h) => !h.ok)) verdict = hosts.some((h) => h.why === 'dpi') ? 'dpi' : 'path';
@@ -729,15 +747,23 @@ class RealService extends EventEmitter {
 
   // after (re)install, or on start when the helper has none: re-apply catalog strategies from the copy.
   // bc2-* (deep) ones lived in /var/lib/ytunblock/custom and the helper takes no raw args: skipped.
-  async restoreStrategies() {
+  restoreStrategies() {
+    if (!this.restoring) this.restoring = this.doRestoreStrategies().finally(() => { this.restoring = null; });
+    return this.restoring;
+  }
+
+  async doRestoreStrategies() {
     const b = this.settings.strategyBackup;
     const st = (this.status && this.status.strategies) || {};
     if (!b || !this.installed() || this.select) return false;
     if (st.default || Object.keys(st.networks || {}).length) return false;
     const known = new Set(this.loadCatalog().map((x) => x.id));
     const items = [];
-    if (b.default) items.push([null, b.default.id]);
-    for (const [n, r] of Object.entries(b.networks || {})) items.push([n, r.id]);
+    const idOf = (r) => (r && typeof r === 'object' && typeof r.id === 'string' ? r.id : null);
+    if (typeof b !== 'object') return false;
+    if (idOf(b.default)) items.push([null, idOf(b.default)]);
+    const nets = b.networks && typeof b.networks === 'object' ? b.networks : {};
+    for (const [n, r] of Object.entries(nets)) if (idOf(r)) items.push([n, idOf(r)]);
     let restored = 0;
     for (const [net, id] of items) {
       if (!known.has(id)) {

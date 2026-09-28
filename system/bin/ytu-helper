@@ -616,27 +616,36 @@ cmd_select_run()
 	SEL_STARTED_AT=$(now_iso)
 	SEL_PASSED=
 	SEL_DONE=0
-	# D7: with an IPv6 default route the browser prefers v6, so a strategy must pass both.
-	# YTU_IPVS is a test hook (reaches the unit only via --setenv in SIMULATE mode)
-	SEL_IPVS=${YTU_IPVS:-}
-	if [ -z "$SEL_IPVS" ]; then
-		SEL_IPVS=4
-		ip -6 route show default 2>/dev/null | grep -q '^default' && SEL_IPVS=46
-	fi
-	case "$SEL_IPVS" in
-		46) SEL_NV=2; SEL_IPVS_LIST="4 6" ;;
-		*) SEL_IPVS=4; SEL_NV=1; SEL_IPVS_LIST=4 ;;
-	esac
 	SEL_PREV=off
 	systemctl is-active --quiet "$YTU_UNIT" && SEL_PREV=on
 	printf 'prev=%s\nmode=%s\nnetwork=%s\nstartedAt=%s\n' "$SEL_PREV" "$SEL_MODE" "$SEL_NETWORK" "$SEL_STARTED_AT" >"$SEL_STATE"
 	trap select_cleanup EXIT
 	trap select_signal INT TERM HUP
-	ytu_log "select $SEL_MODE start network=$SEL_NETWORK prev=$SEL_PREV ipvs=$SEL_IPVS"
+	ytu_log "select $SEL_MODE start network=$SEL_NETWORK prev=$SEL_PREV"
 	# blockcheck2 only warns about a running nfqws2, but its results would be garbage
 	[ "$SEL_PREV" = on ] && systemctl stop "$YTU_UNIT"
 	nft_drop_blockcheck_tables
+	# after the service is stopped: its desync (no hostlist for syndata) must not skew the v6 probe
+	# D7: with an IPv6 default route the browser prefers v6, so a strategy must pass both.
+	# YTU_IPVS is a test hook (reaches the unit only via --setenv in SIMULATE mode)
+	SEL_IPVS=${YTU_IPVS:-}
+	if [ -z "$SEL_IPVS" ]; then
+		SEL_IPVS=4
+		if ip -6 route show default 2>/dev/null | grep -q '^default'; then
+			# a v6 route from RA/VPN without real v6 would fail every v6 test (blockcheck2 pings first too)
+			if curl -6 -sS -I --max-time 5 -o /dev/null https://www.google.com >/dev/null 2>&1; then
+				SEL_IPVS=46
+			else
+				ytu_log "select: IPv6 default route but no IPv6 connectivity, testing IPv4 only"
+			fi
+		fi
+	fi
+	case "$SEL_IPVS" in
+		46) SEL_NV=2; SEL_IPVS_LIST="4 6" ;;
+		*) SEL_IPVS=4; SEL_NV=1; SEL_IPVS_LIST=4 ;;
+	esac
 
+	ytu_log "select $SEL_MODE ipvs=$SEL_IPVS"
 	emit_progress 0 1 ""
 	if [ "$SEL_MODE" = quick ]; then
 		select_quick
@@ -664,9 +673,11 @@ cmd_select()
 	: >"$SEL_JSONL"
 	chmod 0644 "$SEL_JSONL"
 	rm -f "$SEL_LAST"
-	# test hooks; pkexec clears the environment, so an unprivileged caller cannot set them
-	[ "$YTU_SIMULATE" = 1 ] && env="--setenv=YTU_SIMULATE=1 --setenv=YTU_SIM_RATE=${YTU_SIM_RATE:-50} --setenv=YTU_IPVS=${YTU_IPVS:-}"
-	[ -z "$PKEXEC_UID" ] && [ "$YTU_NO_PREFLIGHT" = 1 ] && env="$env --setenv=YTU_NO_PREFLIGHT=1"
+	# test hooks: only for a direct root run (pkexec also clears the environment)
+	if [ -z "$PKEXEC_UID" ]; then
+		[ "$YTU_SIMULATE" = 1 ] && env="--setenv=YTU_SIMULATE=1 --setenv=YTU_SIM_RATE=${YTU_SIM_RATE:-50} --setenv=YTU_IPVS=${YTU_IPVS:-}"
+		[ "$YTU_NO_PREFLIGHT" = 1 ] && env="$env --setenv=YTU_NO_PREFLIGHT=1"
+	fi
 	systemctl reset-failed "$YTU_SELECT_UNIT" 2>/dev/null
 	# shellcheck disable=SC2086
 	systemd-run --unit="$YTU_SELECT_UNIT" --collect --quiet -p PrivateTmp=yes $env \

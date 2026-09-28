@@ -117,6 +117,8 @@ const waitFor = async (fn, ms) => {
   st = await svc.getState();
   ok(!st.installed, 'uninstall');
 
+  svc.dispose();
+  svc2.dispose();
   console.log(fail ? 'SOME FAILED (real.js)' : 'ALL PASS (real.js)');
   process.exit(fail);
 })().catch((e) => {
