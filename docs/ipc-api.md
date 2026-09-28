@@ -21,7 +21,7 @@ Renderer к системе доступа не имеет (contextIsolation, san
 | `checkNow()` | `CheckResult` |
 | `startSelect(mode: 'quick'\|'deep')` | `void`; прогресс идёт событиями |
 | `cancelSelect()` | `void` |
-| `listStrategies()` | `{id, name, source, exact}[]` |
+| `listStrategies()` | `{id, name, source, exact, args?: string}[]` (`args` — для «Текущие параметры») |
 | `applyStrategy(id)` | `void` — ручной выбор (расширенный режим) |
 | `getSettings()` / `setSettings(patch)` | `Settings` |
 | `getLog(lines?)` | `string` |
@@ -30,7 +30,10 @@ Renderer к системе доступа не имеет (contextIsolation, san
 События (`api.on(name, cb)`, возвращает unsubscribe):
 
 - `state` → `State` — любое изменение состояния.
-- `selectProgress` → `{mode, done, total, current: string|null, etaSec: number|null}`.
+- `selectProgress` → `{mode, done, total, current: string|null, etaSec: number|null, startedAt?: string,
+  hosts?: {key, ok: boolean|null}[]}` — `hosts`: галочки по хостам для текущего кандидата.
+  main запоминает последний `selectProgress` и повторяет его при (пере)загрузке окна.
+- `installProgress` → `{step: string, done: number, total: number}` — шаги установки (необязательно).
 - `selectDone` → `{mode, found: boolean, strategyId?: string, cancelled?: boolean}`.
 - `networkChanged` → `{network: Network, hasStrategy: boolean}`.
 
