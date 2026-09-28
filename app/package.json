@@ -1,0 +1,44 @@
+{
+  "name": "ytunblock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "YouTube без блокировок — автоподбор стратегии zapret2",
+  "main": "main/main.js",
+  "license": "MIT",
+  "author": "ytunblock",
+  "scripts": {
+    "start": "electron .",
+    "mock": "YTU_SERVICE=mock electron .",
+    "icons": "electron scripts/gen-icons.js",
+    "screenshots": "node scripts/screenshots.js",
+    "dist": "electron-builder --linux AppImage --x64 --arm64"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "playwright-core": "^1.63.0"
+  },
+  "build": {
+    "appId": "org.ytunblock.app",
+    "productName": "ytunblock",
+    "files": [
+      "main/**",
+      "renderer/**",
+      "assets/**",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Network"
+    }
+  }
+}
