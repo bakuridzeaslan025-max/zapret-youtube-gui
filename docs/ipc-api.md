@@ -70,8 +70,9 @@ type Settings = { autostart: boolean, blockQuic: boolean, perNetwork: boolean, a
 `uninstall`. Вывод — одна JSON-строка на stdout (события прогресса — JSON-lines), код выхода ≠ 0
 при ошибке с `{"error": CODE, "message": ...}`.
 
-Установку (`install`) main выполняет иначе: `pkexec` запускает скрипт-установщик, скопированный
-из AppImage во временный каталог с правами 0755 (root не читает FUSE-маунт AppImage).
+Установку (`install`) main выполняет иначе: весь payload (установщик, nfqws2, lua, files/fake,
+strategies, unit, polkit, AppArmor-профиль) копируется из AppImage во временный каталог с правами
+0755, и `pkexec` запускает установщик оттуда (root не читает FUSE-маунт AppImage).
 
 | Команда | Что делает |
 |---|---|
@@ -81,7 +82,7 @@ type Settings = { autostart: boolean, blockQuic: boolean, perNetwork: boolean, a
 | `select quick\|deep [--network ID]` | остановить сервис, прогнать blockcheck2, JSON-lines прогресса, в конце результат; сервис вернуть в прежнее состояние |
 | `select-follow` | подключиться к идущему подбору: отдать уже накопленный прогресс и дальше JSON-lines до конца; если подбора нет — последний результат |
 | `cancel` | прервать идущий подбор |
-| `set-quic on\|off` | правило nft: drop UDP/443 к hostlist (ipset/nft set по резолву) |
+| `set-quic on\|off` | вкл/выкл профиль nfqws2 `--filter-udp=443 --filter-l7=quic --hostlist=<youtube> --lua-desync=drop` (по SNI в QUIC Initial; nft-set по резолву не годится — `rr*.googlevideo.com` не перечислить) |
 | `uninstall` | удалить всё поставленное (юнит, nft, /opt, polkit, AppArmor-профиль) |
 
 Проверка доступности (`checkNow`) и определение сети — в main, без root (curl/Node https с
@@ -101,3 +102,24 @@ type Settings = { autostart: boolean, blockQuic: boolean, perNetwork: boolean, a
 - Трей есть: закрытие прячет окно в трей (при первом разе — уведомление «свёрнуто в трей»).
 - Трея нет: закрытие завершает GUI; обход продолжает работать в systemd. Если идёт подбор —
   перед закрытием предупреждение «подбор продолжится, результат увидите при следующем запуске».
+
+## Безопасность helper'а
+
+Команды без пароля доступны любому процессу пользователя в активной сессии → helper считает
+аргументы враждебными:
+- `strategy-id`, `--network ID` — только `^[a-z0-9-]{1,64}$`; стратегия ищется только в root-owned
+  `/opt/ytunblock/strategies/nfqws2.json`. Сырые nfqws2-аргументы, пути, файлы извне не принимаются.
+- Всё состояние — root-owned `/var/lib/ytunblock` (0755/0644); из `$HOME` и `/tmp` helper ничего
+  не читает. Настройки GUI (`~/.config/ytunblock`) root-стороне не передаются, кроме валидированных
+  значений через аргументы.
+- `uninstall` — только с паролем (`auth_admin`).
+
+## Состояния и восстановление
+
+- Во время `selecting` команды `start`/`stop`/`apply`/`set-quic`/`select` → `BUSY`
+  (в UI: `setEnabled`/`applyStrategy` отклоняются с `BUSY`).
+- `cancel`: останавливает unit подбора (вся группа процессов), удаляет nft-таблицы blockcheck2,
+  возвращает сервис в состояние до подбора. Это же делает сам `select` при любом завершении (trap).
+- Если подбор умер аварийно (kill -9, перезагрузка): `status` и `start` находят хвосты
+  (таблицы blockcheck2 с `queue` без слушателя, неактивный unit подбора при `selecting` в
+  состоянии), чистят их и восстанавливают сервис. Иначе трафик к тестовым IP висит.

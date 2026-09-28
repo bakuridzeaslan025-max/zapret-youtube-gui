@@ -143,7 +143,6 @@
       "risks": [
         "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
         "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
-        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
         "hostfakesplit altorder=1 не выражается: nfqws1 шлёт before,fake,after,real (без fake2); nfqws2 с nofake2 — before,fake,real,after (desync.c:2175 vs zapret-antidpi.lua:698-707)",
         "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
       ],
@@ -189,7 +188,8 @@
       "notes": [
         "no hostlist/ipset: profile applies to ALL traffic on its ports",
         "port filter also includes Discord ports",
-        "desync=syndata acts on the SYN: nft/iptables rules must queue the outgoing SYN too"
+        "desync=syndata acts on the SYN: nft/iptables rules must queue the outgoing SYN too",
+        "в оригинале был --filter-l3=ipv4 (flowseal.json:510); фильтр L3 задаём сами — если ловим IPv6, ALT5 на нём не проверялась"
       ]
     },
     {
@@ -281,7 +281,6 @@
       "risks": [
         "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
         "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
-        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
         "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
       ],
       "notes": []
@@ -303,7 +302,6 @@
       "risks": [
         "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
         "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
-        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
         "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
       ],
       "notes": []
@@ -325,7 +323,6 @@
       "risks": [
         "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
         "fake без --dpi-desync-fake-tls: nfqws1 брал встроенный fake, в nfqws2 это fake_default_tls (байты идентичны, SNI www.microsoft.com)",
-        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
         "многопакетный ClientHello (kyber) режется по reasm целиком, nfqws1 резал по частям (replay)"
       ],
       "notes": []
@@ -346,7 +343,6 @@
       "exact": true,
       "risks": [
         "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
-        "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
         "multidisorder в nfqws2 режет reasm целиком; для многопакетного ClientHello (kyber) порядок сегментов иной, чем в nfqws1. Точный аналог — multidisorder_legacy (manual.md:4293-4295)"
       ],
       "notes": []

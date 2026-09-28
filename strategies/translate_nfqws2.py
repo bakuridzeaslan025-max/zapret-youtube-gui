@@ -25,7 +25,6 @@ NFQWS1_ONLY_NOTES = ("--ip-id exists in zapret1", "fooling=ts needs TCP timestam
 MODES = {"syndata", "fake", "multisplit", "multidisorder", "fakedsplit", "hostfakesplit"}
 
 RISK = {
-    "rnd": "tls_mod=rnd: nfqws2 рандомизирует fake на каждой отправке, nfqws1 — один раз при старте (readme.md:270-271)",
     "badseq": "badseq -> tcp_seq/tcp_ack + tcp_ts_up: в nfqws2 нет badseq, tcp_ts_up повторяет порядок tcp-опций nfqws1 (readme.md:225-232)",
     "ts": "fooling ts: нужен net.ipv4.tcp_timestamps=1, иначе фейк не фулится (zapret-lib.lua:1009-1019 — без опции только DLOG)",
     "multidisorder": "multidisorder в nfqws2 режет reasm целиком; для многопакетного ClientHello (kyber) порядок сегментов иной, чем в nfqws1. Точный аналог — multidisorder_legacy (manual.md:4293-4295)",
@@ -164,8 +163,6 @@ def translate(desync_args, fake_dir):
                 inst = ["fake", f"blob={f['blob']}"] + fake_side
                 if f["mod"]:
                     inst.append("tls_mod=" + ",".join(f["mod"]))
-                    if "rnd" in f["mod"]:
-                        risks.append(RISK["rnd"])
                 main.append(inst)
             used |= {"fooling", "repeats", "fake"}
         elif m in ("multisplit", "multidisorder"):
